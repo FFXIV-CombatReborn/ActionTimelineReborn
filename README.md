@@ -1,4 +1,4 @@
-**Action Timeline Reborn**
+## Action Timeline Reborn
 
 ![Github Latest Releases](https://img.shields.io/github/downloads/FFXIV-CombatReborn/ActionTimelineReborn/latest/total.svg?style=for-the-badge)
 ![Github All Releases](https://img.shields.io/github/downloads/FFXIV-CombatReborn/ActionTimelineReborn/total.svg?style=for-the-badge)
