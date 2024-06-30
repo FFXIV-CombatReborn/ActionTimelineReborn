@@ -2,7 +2,6 @@
   "Author": "The Combat Reborn Team",
   "Name": "ActionTimeline Reborn",
   "InternalName": "ActionTimelineEx",
-  "AssemblyVersion": "1.3.6.0",
   "Description": "Configurable timeline display of all the actions you use.",
   "ApplicableVersion": "any",
   "Tags": [
@@ -11,7 +10,7 @@
   "CategoryTags": [
     "UI"
   ],
-  "DalamudApiLevel": 9,
+  "DalamudApiLevel": 10,
   "LoadRequiredState": 0,
   "LoadSync": false,
   "CanUnloadAsync": false,
