@@ -4,6 +4,7 @@ using ECommons.ImGuiMethods;
 using ImGuiNET;
 using Lumina.Data.Files;
 using System.Numerics;
+using Dalamud.Interface.Textures.TextureWraps;
 
 namespace ActionTimeline.Helpers;
 
@@ -15,18 +16,7 @@ internal static class DrawHelper
     private static IDalamudTextureWrap? _roundTex;
     public static void Init()
     {
-        var tex = Svc.Data.GetFile<TexFile>("ui/uld/icona_frame_hr1.tex");
-        if (tex == null) return;
-        byte[] imageData = tex.ImageData;
-        byte[] array = new byte[imageData.Length];
-
-        for (int i = 0; i < imageData.Length; i += 4)
-        {
-            array[i] = array[i + 1] = array[i + 2] = byte.MaxValue;
-            array[i + 3] = imageData[i + 3];
-        }
-
-        _roundTex = Svc.PluginInterface.UiBuilder.LoadImageRaw(array, tex!.Header.Width, tex!.Header.Height, 4);
+        ThreadLoadImageHandler.TryGetTextureWrap("ui/uld/icona_frame_hr1.tex", out _roundTex);
     }
 
     public static void DrawDamage(this ImDrawListPtr drawList, Vector2 position, float size, uint  lightCol)

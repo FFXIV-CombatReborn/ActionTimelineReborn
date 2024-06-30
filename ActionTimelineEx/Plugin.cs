@@ -66,7 +66,7 @@ public class Plugin : IDalamudPlugin
     private static WindowSystem _windowSystem = null!;
     private static SettingsWindow _settingsWindow = null!;
 
-    public Plugin(DalamudPluginInterface pluginInterface)
+    public Plugin(IDalamudPluginInterface pluginInterface)
     {
         ECommonsMain.Init(pluginInterface, this);
 
@@ -192,6 +192,5 @@ public class Plugin : IDalamudPlugin
 
         Svc.PluginInterface.UiBuilder.Draw -= Draw;
         Svc.PluginInterface.UiBuilder.OpenConfigUi -= OpenConfigUi;
-        Svc.PluginInterface.UiBuilder.RebuildFonts();
     }
 }

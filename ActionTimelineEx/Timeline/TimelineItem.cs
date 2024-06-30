@@ -4,6 +4,7 @@ using Dalamud.Interface;
 using Dalamud.Interface.Internal;
 using ImGuiNET;
 using System.Numerics;
+using Dalamud.Interface.Textures.TextureWraps;
 
 namespace ActionTimelineEx.Timeline;
 
