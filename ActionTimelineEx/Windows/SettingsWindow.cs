@@ -9,7 +9,7 @@ using Dalamud.Utility;
 using ECommons.Commands;
 using ECommons.DalamudServices;
 using ImGuiNET;
-using Lumina.Excel.GeneratedSheets;
+using Lumina.Excel.Sheets;
 using System.Numerics;
 
 namespace ActionTimeline.Windows
@@ -167,7 +167,7 @@ namespace ActionTimeline.Windows
                     if (texture != null)
                     {
                         ImGui.Image(texture.ImGuiHandle, new Vector2(24, 30));
-                        DrawHelper.SetTooltip(status?.Name ?? string.Empty);
+                        DrawHelper.SetTooltip(status?.Name.ToString() ?? string.Empty);
                         ImGui.SameLine();
                     }
 
