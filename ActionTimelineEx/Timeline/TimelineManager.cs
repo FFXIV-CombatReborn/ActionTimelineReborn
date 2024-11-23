@@ -7,10 +7,10 @@ using ECommons.GameHelpers;
 using ECommons.Hooks;
 using ECommons.Hooks.ActionEffectTypes;
 using FFXIVClientStructs.FFXIV.Client.Game;
-using Lumina.Excel.GeneratedSheets;
+using Lumina.Excel.Sheets;
 using RotationSolver.Basic.Data;
-using Action = Lumina.Excel.GeneratedSheets.Action;
-using Status = Lumina.Excel.GeneratedSheets.Status;
+using Action = Lumina.Excel.Sheets.Action;
+using Status = Lumina.Excel.Sheets.Status;
 
 namespace ActionTimeline.Timeline;
 
@@ -74,7 +74,7 @@ public class TimelineManager : IDisposable
     private readonly Hook<OnActorControlDelegate>? _onActorControlHook = null;
 
     private delegate void OnCastDelegate(uint sourceId, IntPtr sourceCharacter);
-    [Signature("40 55 56 48 81 EC ?? ?? ?? ?? 48 8B EA", DetourName = nameof(OnCast))]
+    [Signature("40 56 41 56 48 81 EC ?? ?? ?? ?? 48 8B F2", DetourName = nameof(OnCast))]
     private readonly Hook<OnCastDelegate>? _onCastHook = null;
 
     public static SortedSet<ushort> ShowedStatusId { get; } = [];
@@ -166,9 +166,9 @@ public class TimelineManager : IDisposable
 
                 if (actionId == 3) return TimelineItemType.OGCD; //Sprint
 
-                var actionCate = (ActionCate)(action.ActionCategory.Value?.RowId ?? 0);
+                var actionCate = (ActionCate)(action.Value.ActionCategory.Value.RowId);
 
-                var isRealGcd = action.CooldownGroup == GCDCooldownGroup || action.AdditionalCooldownGroup == GCDCooldownGroup;
+                var isRealGcd = action.Value.CooldownGroup == GCDCooldownGroup || action.Value.AdditionalCooldownGroup == GCDCooldownGroup;
                 return actionCate == ActionCate.AutoAttack
                     ? TimelineItemType.AutoAttack
                     : !isRealGcd && actionCate == ActionCate.Ability ? TimelineItemType.OGCD
@@ -176,7 +176,7 @@ public class TimelineManager : IDisposable
 
             case ActionType.Item:
                 var item = Svc.Data.GetExcelSheet<Item>()?.GetRow(actionId);
-                return item?.CastTimes > 0 ? TimelineItemType.GCD : TimelineItemType.OGCD;
+                return item?.CastTimeSeconds > 0 ? TimelineItemType.GCD : TimelineItemType.OGCD;
         }
 
         return TimelineItemType.GCD;
@@ -198,14 +198,14 @@ public class TimelineManager : IDisposable
         if (Plugin.Settings.HideStatusIds.Contains(id)) return 0;
         var status = Svc.Data.GetExcelSheet<Status>()?.GetRow(id);
         if (status == null) return 0;
-        name = status.Name;
+        name = status.Value.Name.ToString();
 
         ShowedStatusId.Add(id);
-        var icon = status.Icon;
+        var icon = status.Value.Icon;
 
         if (isGain)
         {
-            return icon + (uint)Math.Max(0, status.MaxStacks - 1);
+            return icon + (uint)Math.Max(0, status.Value.MaxStacks - 1);
         }
         else
         {
@@ -364,8 +364,7 @@ public class TimelineManager : IDisposable
 
         foreach (var status in statusList)
         {
-            var icon = Svc.Data.GetExcelSheet<Status>()?.GetRow(status.StatusId)?.Icon;
-            if (icon == null) continue;
+            var icon = Svc.Data.GetExcelSheet<Status>().GetRow(status.StatusId).Icon;
 
             foreach (var item in list)
             {
@@ -464,7 +463,7 @@ public class TimelineManager : IDisposable
 
             AddItem(new TimelineItem()
             {
-                Name =  action?.Name ?? string.Empty,
+                Name =  action?.Name.ToString() ?? string.Empty,
                 Icon =  actionId == 4 ? (ushort)118 //Mount
                         : action?.Icon ?? 0,
                 StartTime = DateTime.Now,
