@@ -6,6 +6,7 @@ using ECommons.DalamudServices;
 using ECommons.GameHelpers;
 using ECommons.Hooks;
 using ECommons.Hooks.ActionEffectTypes;
+using ECommons.Schedulers;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using Lumina.Excel.Sheets;
 using RotationSolver.Basic.Data;
@@ -209,9 +210,9 @@ public class TimelineManager : IDisposable
         }
         else
         {
-            if(stack == byte.MaxValue)
+            if (stack == byte.MaxValue)
             {
-                stack = Player.Object.StatusList.FirstOrDefault(s => s.StatusId == id)?.StackCount ?? 0;
+                stack = (byte)(Player.Object.StatusList.FirstOrDefault(s => s.StatusId == id)?.Param ?? 0);
                 stack++;
             }
             return icon + (uint)Math.Max(0, stack - 1);
@@ -225,7 +226,7 @@ public class TimelineManager : IDisposable
 #if DEBUG
         //Svc.Chat.Print($"Id: {set.Header.ActionID}; {set.Header.ActionType}; Source: {set.Source.ObjectId}");
 #endif 
-        if (set.Source.GameObjectId != Player.Object.GameObjectId || !Plugin.Settings.Record) return;
+        if (set.Source?.GameObjectId != Player.Object?.GameObjectId || !Plugin.Settings.Record) return;
 
         DamageType damage = DamageType.None;
         SortedSet<(uint, string?)> statusGain = [], statusLose = [];
@@ -234,7 +235,7 @@ public class TimelineManager : IDisposable
         {
             var effect = set.TargetEffects[i];
             var recordTarget = Plugin.Settings.RecordTargetStatus 
-                || effect.TargetID == Player.Object.GameObjectId;
+                || effect.TargetID == Player.Object?.GameObjectId;
 
             if (effect[0].type is ActionEffectType.Damage or ActionEffectType.Heal)
             {
@@ -328,52 +329,51 @@ public class TimelineManager : IDisposable
         }
     }
 
-    private async void AddStatusLine(TimelineItem? effectItem, ulong targetId)
+    private void AddStatusLine(TimelineItem? effectItem, ulong targetId)
     {
         if (effectItem == null) return;
 
-        await Task.Delay(50);
-
         if (effectItem.StatusGainIcon.Count == 0) return;
 
-        List<StatusLineItem> list = new(4);
-        foreach (var icon in effectItem.StatusGainIcon)
+        Svc.Framework.RunOnTick(() =>
         {
-            if (Plugin.IconStack.TryGetValue(icon.icon, out var stack))
+            List<StatusLineItem> list = new(4);
+            foreach (var icon in effectItem.StatusGainIcon)
             {
-                var item = new StatusLineItem()
+                if (Plugin.IconStack.TryGetValue(icon.icon, out var stack))
                 {
-                    Icon = icon.icon,
-                    Name = icon.name,
-                    TimeDuration = 6,
-                    Stack = stack,
-                    StartTime = effectItem.StartTime,
-                };
-                list.Add(item);
-                AddItem(item);
-            }
-        }
-
-        var statusList = Player.Object.StatusList.Where(s => s.SourceId == Player.Object.GameObjectId);
-        if (Svc.Objects.SearchById(targetId) is IBattleChara b)
-        {
-            statusList = statusList.Union(b.StatusList.Where(s => s.SourceId == Player.Object.GameObjectId));
-        }
-
-        await Task.Delay(950);
-
-        foreach (var status in statusList)
-        {
-            var icon = Svc.Data.GetExcelSheet<Status>().GetRow(status.StatusId).Icon;
-
-            foreach (var item in list)
-            {
-                if (item.Icon == icon)
-                {
-                    item.TimeDuration = (float)(DateTime.Now - effectItem.StartTime).TotalSeconds + status.RemainingTime;
+                    var item = new StatusLineItem()
+                    {
+                        Icon = icon.icon,
+                        Name = icon.name,
+                        TimeDuration = 6,
+                        Stack = stack,
+                        StartTime = effectItem.StartTime,
+                    };
+                    list.Add(item);
+                    AddItem(item);
                 }
             }
-        }
+
+            var statusList = Player.Object.StatusList.Where(s => s.SourceId == Player.Object.GameObjectId);
+            if (Svc.Objects.SearchById(targetId) is IBattleChara b)
+            {
+                statusList = statusList.Union(b.StatusList.Where(s => s.SourceId == Player.Object.GameObjectId));
+            }
+
+            foreach (var status in statusList)
+            {
+                var icon = Svc.Data.GetExcelSheet<Status>().GetRow(status.StatusId).Icon;
+
+                foreach (var item in list)
+                {
+                    if (item.Icon == icon)
+                    {
+                        item.TimeDuration = (float)(DateTime.Now - effectItem.StartTime).TotalSeconds + status.RemainingTime;
+                    }
+                }
+            }
+        });
     }
 
     private async void OnActorControl(uint entityId, ActorControlCategory type, uint buffID, uint direct, uint actionId, uint sourceId, uint arg4, uint arg5, ulong targetId, byte a10)
@@ -389,9 +389,9 @@ public class TimelineManager : IDisposable
 
         try
         {
-            if (entityId != Player.Object?.GameObjectId) return;
+            if (Player.Object == null || entityId != Player.Object.GameObjectId) return;
 
-            var record = Plugin.Settings.Record && sourceId == Player.Object?.GameObjectId;
+            var record = Plugin.Settings.Record && sourceId == Player.Object.GameObjectId;
 
             switch (type)
             {
@@ -400,9 +400,9 @@ public class TimelineManager : IDisposable
                     break;
 
                 case ActorControlCategory.LoseEffect when record:
-                    var stack = Player.Object?.StatusList.FirstOrDefault(s => s.StatusId == buffID && s.SourceId == Player.Object.GameObjectId)?.StackCount ?? 0;
+                    var stack = Player.Object?.StatusList.FirstOrDefault(s => s.StatusId == buffID && s.SourceId == Player.Object.GameObjectId)?.Param ?? 0;
 
-                    var icon = GetStatusIcon((ushort)buffID, false, out var name, ++stack);
+                    var icon = GetStatusIcon((ushort)buffID, false, out var name, (byte)++stack);
                     if (icon == 0) break;
                     var now = DateTime.Now;
 
@@ -413,7 +413,7 @@ public class TimelineManager : IDisposable
                         status.TimeDuration = (float)(now - status.StartTime).TotalSeconds;
                     }
 
-                    await Task.Delay(10);
+                    await Task.Delay(10).ConfigureAwait(false);
 
                     if (_lastItem != null && now < _lastTime)
                     {
@@ -422,7 +422,7 @@ public class TimelineManager : IDisposable
                     break;
 
                 //case ActorControlCategory.UpdateEffect:
-                //    await Task.Delay(10);
+                //    await Task.Delay(10).ConfigureAwait(false);
 
                 //    icon = GetStatusIcon((ushort)direct, false, (byte)actionId);
                 //    if (icon != 0) _lastItem?.StatusLoseIcon.Add(icon);
@@ -432,7 +432,7 @@ public class TimelineManager : IDisposable
                     icon = GetStatusIcon((ushort)buffID, true, out name);
                     if (icon == 0) break;
                     now = DateTime.Now;
-                    await Task.Delay(10);
+                    await Task.Delay(10).ConfigureAwait(false);
 
                     if (_lastItem != null && now < _lastTime + TimeSpan.FromSeconds(0.01))
                     {
