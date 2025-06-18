@@ -2,6 +2,7 @@
   "Author": "The Combat Reborn Team",
   "Name": "ActionTimeline Reborn",
   "InternalName": "ActionTimelineEx",
+  "RepoUrl": "https://github.com/FFXIV-CombatReborn/ActionTimelineReborn",
   "Description": "Configurable timeline display of all the actions you use.",
   "ApplicableVersion": "any",
   "Tags": [
