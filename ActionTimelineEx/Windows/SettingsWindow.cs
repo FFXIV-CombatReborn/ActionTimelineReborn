@@ -1,6 +1,6 @@
-﻿using ActionTimeline.Helpers;
-using ActionTimeline.Timeline;
-using ActionTimelineEx.Configurations;
+using ActionTimelineReborn.Helpers;
+using ActionTimelineReborn.Timeline;
+using ActionTimelineReborn.Configurations;
 using Dalamud.Interface;
 using Dalamud.Interface.Colors;
 using Dalamud.Interface.Utility;
@@ -8,18 +8,18 @@ using Dalamud.Interface.Windowing;
 using Dalamud.Utility;
 using ECommons.Commands;
 using ECommons.DalamudServices;
-using ImGuiNET;
+using Dalamud.Bindings.ImGui;
 using Lumina.Excel.Sheets;
 using System.Numerics;
 
-namespace ActionTimeline.Windows
+namespace ActionTimelineReborn.Windows
 {
     public class SettingsWindow : Window
     {
         private float _scale => ImGuiHelpers.GlobalScale;
         private Settings Settings => Plugin.Settings;
 
-        public SettingsWindow() : base("ActionTimelineEx v" + typeof(SettingsWindow).Assembly.GetName().Version?.ToString() ?? string.Empty)
+        public SettingsWindow() : base("ActionTimelineReborn v" + typeof(SettingsWindow).Assembly.GetName().Version?.ToString() ?? string.Empty)
         {
             SizeCondition = ImGuiCond.FirstUseEver;
             Size = new Vector2(300, 490f);
@@ -34,7 +34,7 @@ namespace ActionTimeline.Windows
 
         public override void Draw()
         {
-            if (!ImGui.BeginTabBar("ActionTimelineEx Bar")) return;
+            if (!ImGui.BeginTabBar("ActionTimelineReborn Bar")) return;
 
             if (ImGui.BeginTabItem("General"))
             {
@@ -45,7 +45,7 @@ namespace ActionTimeline.Windows
             int index = 0;
             DrawingSettings? removingSetting = null;
 
-            if (!Settings.TimelineSettings.Any()) Settings.TimelineSettings.Add(new DrawingSettings());
+            if (Settings.TimelineSettings.Count == 0) Settings.TimelineSettings.Add(new DrawingSettings());
 
             foreach (var setting in Settings.TimelineSettings)
             {
@@ -78,14 +78,14 @@ namespace ActionTimeline.Windows
             ImGui.PushFont(UiBuilder.IconFont);
             if (ImGui.Button($"{FontAwesomeIcon.Code.ToIconString()}##Github"))
             {
-                Util.OpenLink("https://github.com/ArchiDog1998/ActionTimelineEx");
+                Util.OpenLink("https://github.com/ArchiDog1998/ActionTimelineReborn");
             }
 
             ImGui.SameLine();
 
             if (ImGui.Button($"{FontAwesomeIcon.History.ToIconString()}##ChangeLog"))
             {
-                Util.OpenLink("https://github.com/ArchiDog1998/ActionTimelineEx/blob/release/CHANGELOG.md");
+                Util.OpenLink("https://github.com/ArchiDog1998/ActionTimelineReborn/blob/release/CHANGELOG.md");
             }
             ImGui.SameLine();
 
@@ -131,6 +131,20 @@ namespace ActionTimeline.Windows
             }
 
             ImGui.NewLine();
+            
+            // Clear All Data button with warning color
+            ImGui.PushStyleColor(ImGuiCol.Button, 0xFF4444AA);
+            ImGui.PushStyleColor(ImGuiCol.ButtonActive, 0xFF3333DD);
+            ImGui.PushStyleColor(ImGuiCol.ButtonHovered, 0xFF5555BB);
+            if (ImGui.Button("Clear All Timeline Data"))
+            {
+                TimelineManager.Instance?.ClearAllData();
+                Svc.Chat.Print("[ActionTimelineReborn] All timeline data cleared.");
+            }
+            ImGui.PopStyleColor(3);
+            DrawHelper.SetTooltip("Clears all recorded timeline data and caches. This will free memory and reset the timeline.");
+            
+            ImGui.NewLine();
             ImGui.Checkbox("Record Target Status", ref Settings.RecordTargetStatus);
 
             var index = 0;
@@ -143,7 +157,7 @@ namespace ActionTimeline.Windows
                     var texture = DrawHelper.GetTextureFromIconId(status?.Icon ?? 0);
                     if (texture != null)
                     {
-                        ImGui.Image(texture.ImGuiHandle, new Vector2(18, 24));
+                        ImGui.Image(texture.Handle, new Vector2(18, 24));
                         var tips = $"{status?.Name ?? string.Empty} [{status?.RowId ?? 0}]";
                         DrawHelper.SetTooltip(tips);
                         if (++index % 10 != 0) ImGui.SameLine();
@@ -166,7 +180,7 @@ namespace ActionTimeline.Windows
                     var texture = DrawHelper.GetTextureFromIconId(status?.Icon ?? 0);
                     if (texture != null)
                     {
-                        ImGui.Image(texture.ImGuiHandle, new Vector2(24, 30));
+                        ImGui.Image(texture.Handle, new Vector2(24, 30));
                         DrawHelper.SetTooltip(status?.Name.ToString() ?? string.Empty);
                         ImGui.SameLine();
                     }

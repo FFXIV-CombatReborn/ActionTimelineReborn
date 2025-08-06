@@ -1,7 +1,7 @@
 {
   "Author": "The Combat Reborn Team",
   "Name": "ActionTimeline Reborn",
-  "InternalName": "ActionTimelineEx",
+  "InternalName": "ActionTimelineReborn",
   "RepoUrl": "https://github.com/FFXIV-CombatReborn/ActionTimelineReborn",
   "Description": "Configurable timeline display of all the actions you use.",
   "ApplicableVersion": "any",
@@ -11,7 +11,7 @@
   "CategoryTags": [
     "UI"
   ],
-  "DalamudApiLevel": 12,
+  "DalamudApiLevel": 13,
   "LoadRequiredState": 0,
   "LoadSync": false,
   "CanUnloadAsync": false,
@@ -20,7 +20,7 @@
   "IconUrl": "https://raw.githubusercontent.com/FFXIV-CombatReborn/RebornAssets/main/IconAssets/ATR_Icon.png",
   "Punchline": "Show your actions in real-time.",
   "ImageUrls":[
-     "https://raw.githubusercontent.com/ArchiDog1998/ActionTimelineEx/main/Images/example.gif"
+     "https://raw.githubusercontent.com/ArchiDog1998/ActionTimelineReborn/main/Images/example.gif"
   ],
   "AcceptsFeedback": true
 }

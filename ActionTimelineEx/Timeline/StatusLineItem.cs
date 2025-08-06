@@ -1,12 +1,12 @@
-﻿using ActionTimeline.Helpers;
-using ActionTimelineEx.Configurations;
+using ActionTimelineReborn.Helpers;
+using ActionTimelineReborn.Configurations;
 using Dalamud.Interface.Internal;
-using ImGuiNET;
+using Dalamud.Bindings.ImGui;
 using ImGuiScene;
 using System.Numerics;
 using Dalamud.Interface.Textures.TextureWraps;
 
-namespace ActionTimelineEx.Timeline;
+namespace ActionTimelineReborn.Timeline;
 
 public class StatusLineItem : ITimelineItem
 {
@@ -63,7 +63,7 @@ public class StatusLineItem : ITimelineItem
         leftTop.Y = Math.Max(leftTop.Y, windowPos.Y);
 
         var size = new Vector2(statusHeight / TimelineItem.HeightRatio, statusHeight);
-        drawList.AddImage(texture.ImGuiHandle, leftTop,
+        drawList.AddImage(texture.Handle, leftTop,
             leftTop + size , Vector2.Zero, Vector2.One);
         if (!string.IsNullOrEmpty(Name) && DrawHelper.IsInRect(leftTop, size)) ImGui.SetTooltip(Name);
 

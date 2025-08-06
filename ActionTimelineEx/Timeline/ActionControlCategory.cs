@@ -1,4 +1,4 @@
-﻿namespace ActionTimelineEx.Timeline;
+﻿namespace ActionTimelineReborn.Timeline;
 
 /// <summary>
 /// From https://github.com/Kouzukii/ffxiv-deathrecap/blob/master/Game/ActorControlCategory.cs

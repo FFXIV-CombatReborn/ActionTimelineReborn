@@ -1,12 +1,12 @@
 ﻿using Dalamud.Interface.Internal;
 using ECommons.DalamudServices;
 using ECommons.ImGuiMethods;
-using ImGuiNET;
+using Dalamud.Bindings.ImGui;
 using Lumina.Data.Files;
 using System.Numerics;
 using Dalamud.Interface.Textures.TextureWraps;
 
-namespace ActionTimeline.Helpers;
+namespace ActionTimelineReborn.Helpers;
 
 internal static class DrawHelper
 {
@@ -26,7 +26,7 @@ internal static class DrawHelper
         var pixPerUnit = size / 82;
 
         var outPos = position - new Vector2(pixPerUnit * 31, pixPerUnit * 31);
-        drawList.AddImage(_roundTex.ImGuiHandle, outPos, outPos + new Vector2(pixPerUnit * 144, pixPerUnit * 154),
+        drawList.AddImage(_roundTex.Handle, outPos, outPos + new Vector2(pixPerUnit * 144, pixPerUnit * 154),
         _uv1, _uv2, lightCol);
     }
 
@@ -37,20 +37,20 @@ internal static class DrawHelper
 
         var pixPerUnit = size / 82;
 
-        drawList.AddImage(texture.ImGuiHandle, position, position + new Vector2(size));
+        drawList.AddImage(texture.Handle, position, position + new Vector2(size));
 
         //Cover.
         if (ThreadLoadImageHandler.TryGetTextureWrap("ui/uld/icona_frame_hr1.tex", out var frameText))
         {
             var coverPos = position - new Vector2(pixPerUnit * 3, pixPerUnit * 4);
-            drawList.AddImage(frameText.ImGuiHandle, coverPos, coverPos + new Vector2(pixPerUnit * 88, pixPerUnit * 96),
+            drawList.AddImage(frameText.Handle, coverPos, coverPos + new Vector2(pixPerUnit * 88, pixPerUnit * 96),
                 new Vector2(4f / frameText.Width, 0f / frameText.Height), new Vector2(92f / frameText.Width, 96f / frameText.Height));
         }
     }
 
     public static Vector4 ChangeAlpha(this Vector4 color, float alpha)
     {
-        color.Z = alpha;
+        color.W = alpha;  // W component is alpha, not Z
         return color;
     }
 
@@ -60,11 +60,18 @@ internal static class DrawHelper
 
     private static readonly Dictionary<uint, uint> textureColorCache = [];
     private static readonly Queue<uint> calculating = new ();
+    private static readonly HashSet<uint> calculatingSet = []; // Track items being calculated for O(1) lookup
+    
     public static uint GetTextureAverageColor(uint iconId)
     {
         if (textureColorCache.TryGetValue(iconId, out var color)) return color;
 
-        if (!calculating.Contains(iconId)) calculating.Enqueue(iconId);
+        // Use HashSet for O(1) lookup instead of Queue.Contains which is O(n)
+        if (!calculatingSet.Contains(iconId))
+        {
+            calculating.Enqueue(iconId);
+            calculatingSet.Add(iconId);
+        }
 
         CalculateColor();
         return uint.MaxValue;
@@ -80,6 +87,9 @@ internal static class DrawHelper
         {
             while(calculating.TryDequeue(out var icon))
             {
+                // Remove from calculating set when processing
+                calculatingSet.Remove(icon);
+                
                 var tex = Svc.Data.GetFile<TexFile>($"ui/icon/{icon/1000:D3}000/{icon:D6}.tex");
                 if(tex == null)
                 {

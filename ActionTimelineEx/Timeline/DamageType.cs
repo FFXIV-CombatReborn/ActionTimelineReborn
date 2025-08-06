@@ -1,4 +1,4 @@
-﻿namespace ActionTimelineEx.Timeline;
+﻿namespace ActionTimelineReborn.Timeline;
 
 [Flags]
 public enum DamageType: byte

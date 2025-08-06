@@ -1,4 +1,4 @@
-﻿namespace ActionTimelineEx.Timeline;
+﻿namespace ActionTimelineReborn.Timeline;
 
 public enum TimelineItemType : byte
 {
