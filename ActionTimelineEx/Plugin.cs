@@ -1,15 +1,20 @@
-﻿using ActionTimeline.Helpers;
-using ActionTimeline.Timeline;
-using ActionTimeline.Windows;
+using ActionTimelineReborn.Configurations;
+using ActionTimelineReborn.Helpers;
+using ActionTimelineReborn.Timeline;
+using ActionTimelineReborn.Windows;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Game.ClientState.Conditions;
+using Dalamud.Interface;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
 using ECommons;
 using ECommons.Commands;
 using ECommons.DalamudServices;
 using ECommons.GameHelpers;
+using System.Diagnostics;
+using static Dalamud.Interface.Windowing.Window;
 
-namespace ActionTimeline;
+namespace ActionTimelineReborn;
 
 public class Plugin : IDalamudPlugin
 {
@@ -57,7 +62,7 @@ public class Plugin : IDalamudPlugin
 
         { 12699, 1 }, //SMN 2703.
     };
-    public string Name => "ActionTimelineEx";
+    public static string Name => "ActionTimelineReborn";
 
     public static string Version { get; private set; } = "";
 
@@ -86,6 +91,34 @@ public class Plugin : IDalamudPlugin
         }
 
         CreateWindows();
+        _settingsWindow.TitleBarButtons.Add(new TitleBarButton()
+        {
+            Icon = FontAwesomeIcon.Heart,
+            ShowTooltip = () =>
+            {
+                ImGui.BeginTooltip();
+                ImGui.Text("Support the developer on Ko-fi");
+                ImGui.EndTooltip();
+            },
+            Priority = 2,
+            Click = _ =>
+            {
+                try
+                {
+                    Process.Start(new ProcessStartInfo()
+                    {
+                        FileName = "https://ko-fi.com/ltscombatreborn",
+                        UseShellExecute = true,
+                        Verb = string.Empty
+                    });
+                }
+                catch
+                {
+                    // ignored
+                }
+            },
+            AvailableClickthrough = true
+        });
     }
 
     public void Dispose()
@@ -94,10 +127,10 @@ public class Plugin : IDalamudPlugin
         GC.SuppressFinalize(this);
     }
 
-    [Cmd("/atl", "Opens the ActionTimeline configuration window.")]
+    [Cmd("/atl", "Opens the ActionTimelineReborn configuration window.")]
     [SubCmd("lock", "Lock all windows")]
     [SubCmd("unlock", "Unlock all windows")]
-    private void PluginCommand(string command, string arguments)
+    private static void PluginCommand(string command, string arguments)
     {
         var sub = arguments.Split(' ').FirstOrDefault();
         if(string.Equals("unlock", sub, StringComparison.OrdinalIgnoreCase))
@@ -124,7 +157,7 @@ public class Plugin : IDalamudPlugin
     {
         _settingsWindow = new SettingsWindow();
 
-        _windowSystem = new WindowSystem("ActionTimeline_Windows");
+        _windowSystem = new WindowSystem("ActionTimelineReborn_Windows");
         _windowSystem.AddWindow(_settingsWindow);
     }
 

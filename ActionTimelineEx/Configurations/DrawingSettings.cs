@@ -1,7 +1,7 @@
 ﻿using Dalamud.Interface.Colors;
 using System.Numerics;
 
-namespace ActionTimelineEx.Configurations;
+namespace ActionTimelineReborn.Configurations;
 
 public class DrawingSettings
 {

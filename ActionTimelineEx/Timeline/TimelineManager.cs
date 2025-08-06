@@ -1,4 +1,4 @@
-﻿using ActionTimelineEx.Timeline;
+using ActionTimelineReborn.Timeline;
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Hooking;
 using Dalamud.Utility.Signatures;
@@ -9,11 +9,10 @@ using ECommons.Hooks.ActionEffectTypes;
 using ECommons.Schedulers;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using Lumina.Excel.Sheets;
-using RotationSolver.Basic.Data;
 using Action = Lumina.Excel.Sheets.Action;
 using Status = Lumina.Excel.Sheets.Status;
 
-namespace ActionTimeline.Timeline;
+namespace ActionTimelineReborn.Timeline;
 
 public class TimelineManager : IDisposable
 {
@@ -59,6 +58,11 @@ public class TimelineManager : IDisposable
         }
 
         _items.Clear();
+        _statusItems.Clear();
+        _actionCache.Clear();
+        _statusCache.Clear();
+        _itemCache.Clear();
+        ShowedStatusId.Clear();
 
         ActionEffect.ActionEffectEvent -= ActionFromSelf;
 
@@ -67,6 +71,22 @@ public class TimelineManager : IDisposable
 
         _onCastHook?.Disable();
         _onCastHook?.Dispose();
+    }
+    
+    /// <summary>
+    /// Clears all timeline data and caches. Useful for resetting the timeline or freeing memory.
+    /// </summary>
+    public void ClearAllData()
+    {
+        _items.Clear();
+        _statusItems.Clear();
+        _actionCache.Clear();
+        _statusCache.Clear();
+        _itemCache.Clear();
+        ShowedStatusId.Clear();
+        _lastItem = null;
+        _lastTime = DateTime.MinValue;
+        EndTime = DateTime.Now;
     }
     #endregion
 
@@ -79,6 +99,11 @@ public class TimelineManager : IDisposable
     private readonly Hook<OnCastDelegate>? _onCastHook = null;
 
     public static SortedSet<ushort> ShowedStatusId { get; } = [];
+    
+    // Cache for action data to reduce Excel sheet lookups
+    private static readonly Dictionary<uint, (string name, ushort icon, ActionCate category, byte cooldownGroup, byte additionalCooldownGroup)> _actionCache = [];
+    private static readonly Dictionary<uint, (string name, ushort icon, uint maxStacks)> _statusCache = [];
+    private static readonly Dictionary<uint, (string name, ushort icon, float castTime)> _itemCache = [];
 
     public DateTime EndTime { get; private set; } = DateTime.Now;
     private static readonly int kMaxItemCount = 2048;
@@ -212,7 +237,17 @@ public class TimelineManager : IDisposable
         {
             if (stack == byte.MaxValue)
             {
-                stack = (byte)(Player.Object.StatusList.FirstOrDefault(s => s.StatusId == id)?.Param ?? 0);
+                // Replace LINQ with manual loop for better performance
+                stack = 0;
+                var statusList = Player.Object.StatusList;
+                for (int i = 0; i < statusList.Length; i++)
+                {
+                    if (statusList[i].StatusId == id)
+                    {
+                        stack = (byte)statusList[i].Param;
+                        break;
+                    }
+                }
                 stack++;
             }
             return icon + (uint)Math.Max(0, stack - 1);
@@ -270,7 +305,16 @@ public class TimelineManager : IDisposable
 
         if (Plugin.Settings.PrintClipping && type == TimelineItemType.GCD)
         {
-            var lastGcd = _items.LastOrDefault(i => i.Type == TimelineItemType.GCD);
+            // Replace LINQ with manual loop for better performance
+            TimelineItem? lastGcd = null;
+            foreach (var item in _items)
+            {
+                if (item.Type == TimelineItemType.GCD)
+                {
+                    lastGcd = item;
+                }
+            }
+            
             if(lastGcd != null)
             {
                 var time = (int)(now - lastGcd.EndTime).TotalMilliseconds;
@@ -355,21 +399,57 @@ public class TimelineManager : IDisposable
                 }
             }
 
-            var statusList = Player.Object.StatusList.Where(s => s.SourceId == Player.Object.GameObjectId);
-            if (Svc.Objects.SearchById(targetId) is IBattleChara b)
+            // Replace LINQ with manual loops for better performance
+            if (Player.Object == null) return;
+            var playerGameObjectId = Player.Object.GameObjectId;
+            
+            // Process player status list
+            var playerStatusList = Player.Object.StatusList;
+            for (int i = 0; i < playerStatusList.Length; i++)
             {
-                statusList = statusList.Union(b.StatusList.Where(s => s.SourceId == Player.Object.GameObjectId));
-            }
-
-            foreach (var status in statusList)
-            {
-                var icon = Svc.Data.GetExcelSheet<Status>().GetRow(status.StatusId).Icon;
-
-                foreach (var item in list)
+                var status = playerStatusList[i];
+                if (status.SourceId == playerGameObjectId)
                 {
-                    if (item.Icon == icon)
+                    var statusSheet = Svc.Data.GetExcelSheet<Status>();
+                    var statusRow = statusSheet?.GetRow(status.StatusId);
+                    if (statusRow != null)
                     {
-                        item.TimeDuration = (float)(DateTime.Now - effectItem.StartTime).TotalSeconds + status.RemainingTime;
+                        var icon = statusRow.Value.Icon;
+                        foreach (var item in list)
+                        {
+                            if (item.Icon == icon)
+                            {
+                                item.TimeDuration = (float)(DateTime.Now - effectItem.StartTime).TotalSeconds + status.RemainingTime;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Process target status list if available
+            if (Svc.Objects.SearchById(targetId) is IBattleChara battleChar)
+            {
+                var targetStatusList = battleChar.StatusList;
+                for (int i = 0; i < targetStatusList.Length; i++)
+                {
+                    var status = targetStatusList[i];
+                    if (status.SourceId == playerGameObjectId)
+                    {
+                        var statusSheet = Svc.Data.GetExcelSheet<Status>();
+                        var statusRow = statusSheet?.GetRow(status.StatusId);
+                        if (statusRow != null)
+                        {
+                            var icon = statusRow.Value.Icon;
+                            foreach (var item in list)
+                            {
+                                if (item.Icon == icon)
+                                {
+                                    item.TimeDuration = (float)(DateTime.Now - effectItem.StartTime).TotalSeconds + status.RemainingTime;
+                                    break;
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -400,14 +480,34 @@ public class TimelineManager : IDisposable
                     break;
 
                 case ActorControlCategory.LoseEffect when record:
-                    var stack = Player.Object?.StatusList.FirstOrDefault(s => s.StatusId == buffID && s.SourceId == Player.Object.GameObjectId)?.Param ?? 0;
+                    // Replace LINQ with manual loop for better performance
+                    var stack = 0;
+                    if (Player.Object != null)
+                    {
+                        var statusList = Player.Object.StatusList;
+                        for (int i = 0; i < statusList.Length; i++)
+                        {
+                            if (statusList[i].StatusId == buffID && statusList[i].SourceId == Player.Object.GameObjectId)
+                            {
+                                stack = statusList[i].Param;
+                                break;
+                            }
+                        }
+                    }
 
                     var icon = GetStatusIcon((ushort)buffID, false, out var name, (byte)++stack);
                     if (icon == 0) break;
                     var now = DateTime.Now;
 
-                    //Refine Status.
-                    var status = _statusItems.LastOrDefault(i => i.Icon == icon);
+                    //Refine Status - Replace LINQ with manual loop
+                    StatusLineItem? status = null;
+                    foreach (var item in _statusItems)
+                    {
+                        if (item.Icon == icon)
+                        {
+                            status = item;
+                        }
+                    }
                     if (status != null)
                     {
                         status.TimeDuration = (float)(now - status.StartTime).TotalSeconds;

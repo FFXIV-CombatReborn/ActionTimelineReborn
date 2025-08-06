@@ -1,12 +1,12 @@
-﻿using ActionTimeline.Helpers;
-using ActionTimelineEx.Configurations;
+using ActionTimelineReborn.Helpers;
+using ActionTimelineReborn.Configurations;
 using Dalamud.Interface;
 using Dalamud.Interface.Internal;
-using ImGuiNET;
+using Dalamud.Bindings.ImGui;
 using System.Numerics;
 using Dalamud.Interface.Textures.TextureWraps;
 
-namespace ActionTimelineEx.Timeline;
+namespace ActionTimelineReborn.Timeline;
 
 public class TimelineItem : ITimelineItem
 {
@@ -114,7 +114,7 @@ public class TimelineItem : ITimelineItem
                 for (int i = 0; i < gains.Length; i++)
                 {
                     var size = new Vector2(statusSize, statusSize * HeightRatio);
-                    drawList.AddImage(gains[i].texture.ImGuiHandle, center,
+                    drawList.AddImage(gains[i].texture.Handle, center,
                         center + size, Vector2.Zero, Vector2.One, color);
 
                     var name = gains[i].name;
@@ -127,7 +127,7 @@ public class TimelineItem : ITimelineItem
                 for (int i = 0; i < lose.Length; i++)
                 {
                     var size = new Vector2(statusSize, statusSize * HeightRatio);
-                    drawList.AddImage(lose[i].texture.ImGuiHandle, center,
+                    drawList.AddImage(lose[i].texture.Handle, center,
                         center + size, Vector2.Zero, Vector2.One, color);
 
                     var name = lose[i].name;

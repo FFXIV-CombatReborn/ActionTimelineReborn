@@ -4,11 +4,11 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following 
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("ActionTimelinePlugin")]
+[assembly: AssemblyTitle("ActionTimelineReborn")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("ActionTimelinePlugin")]
+[assembly: AssemblyProduct("ActionTimelineReborn")]
 [assembly: AssemblyCopyright("Copyright © 2021 Tischel")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]

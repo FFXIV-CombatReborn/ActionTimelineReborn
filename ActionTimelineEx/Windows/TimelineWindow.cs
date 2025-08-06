@@ -1,12 +1,10 @@
-﻿using ActionTimeline.Timeline;
-using ActionTimelineEx.Configurations;
-using ActionTimelineEx.Timeline;
-using Dalamud.Interface;
+using ActionTimelineReborn.Timeline;
+using ActionTimelineReborn.Configurations;
 using Dalamud.Interface.Utility;
-using ImGuiNET;
+using Dalamud.Bindings.ImGui;
 using System.Numerics;
 
-namespace ActionTimeline.Windows;
+namespace ActionTimelineReborn.Windows;
 
 internal static class TimelineWindow
 {

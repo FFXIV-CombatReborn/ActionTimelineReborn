@@ -1,8 +1,8 @@
-﻿using ActionTimelineEx.Configurations;
+﻿using ActionTimelineReborn.Configurations;
 using Dalamud.Configuration;
 using ECommons.DalamudServices;
 
-namespace ActionTimeline;
+namespace ActionTimelineReborn.Configurations;
 
 [Serializable]
 public class Settings : IPluginConfiguration
