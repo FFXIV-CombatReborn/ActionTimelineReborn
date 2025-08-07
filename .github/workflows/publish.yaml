@@ -34,7 +34,7 @@ jobs:
         run: dotnet restore ActionTimelineEx/ActionTimelineReborn.json
 
       - name: Build Plugin
-        run: dotnet build --no-restore -c Release ActionTimelineEx/ActionTimelineEx.csproj -p:AssemblyVersion=${{ env.tag }} -p:FileVersion=${{ env.tag }} -p:InformationalVersion=${{ env.tag }} --output .\build
+        run: dotnet build --no-restore -c Release ActionTimelineEx/ActionTimelineReborn.csproj -p:AssemblyVersion=${{ env.tag }} -p:FileVersion=${{ env.tag }} -p:InformationalVersion=${{ env.tag }} --output .\build
 
       - name: Zip Plugin
         run: Compress-Archive -Path .\build\* -DestinationPath .\build\ActionTimelineReborn.zip
