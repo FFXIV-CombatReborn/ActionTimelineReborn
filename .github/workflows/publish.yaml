@@ -31,7 +31,7 @@ jobs:
           Expand-Archive -Force latest.zip "$env:AppData\XIVLauncher\addon\Hooks\dev"
 
       - name: Restore Nuget Packages
-        run: dotnet restore ActionTimelineEx/ActionTimelineReborn.json
+        run: dotnet restore ActionTimelineEx/ActionTimelineReborn.csproj
 
       - name: Build Plugin
         run: dotnet build --no-restore -c Release ActionTimelineEx/ActionTimelineReborn.csproj -p:AssemblyVersion=${{ env.tag }} -p:FileVersion=${{ env.tag }} -p:InformationalVersion=${{ env.tag }} --output .\build
@@ -44,4 +44,3 @@ jobs:
         with:
           files: ./build/ActionTimelineReborn.zip
           token: ${{ secrets.GITHUB_TOKEN }}
-
