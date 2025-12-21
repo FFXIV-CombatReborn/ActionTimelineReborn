@@ -2,7 +2,7 @@
   "Author": "The Combat Reborn Team",
   "Name": "ActionTimeline Reborn",
   "InternalName": "ActionTimelineReborn",
-  "AssemblyVersion": "7.3.0.0",
+  "AssemblyVersion": "7.4.0.0",
   "Description": "Configurable timeline display of all the actions you use.",
   "ApplicableVersion": "any",
   "RepoUrl": "https://github.com/FFXIV-CombatReborn/ActionTimelineReborn",
@@ -12,7 +12,7 @@
   "CategoryTags": [
     "UI"
   ],
-  "DalamudApiLevel": 13,
+  "DalamudApiLevel": 14,
   "LoadRequiredState": 0,
   "LoadSync": false,
   "CanUnloadAsync": false,
