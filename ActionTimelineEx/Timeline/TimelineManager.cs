@@ -90,7 +90,7 @@ public class TimelineManager : IDisposable
     }
     #endregion
 
-    private delegate void OnActorControlDelegate(uint entityId, ActorControlCategory type, uint buffID, uint direct, uint actionId, uint sourceId, uint arg4, uint arg5, ulong targetId, byte a10);
+    private delegate void OnActorControlDelegate(uint entityId, uint type, uint buffID, uint direct, uint actionId, uint sourceId, uint arg7, uint arg8, uint arg9, uint arg10, ulong targetId, byte arg12);
     [Signature("E8 ?? ?? ?? ?? 0F B7 0B 83 E9 64", DetourName = nameof(OnActorControl))]
     private readonly Hook<OnActorControlDelegate>? _onActorControlHook = null;
 
@@ -235,16 +235,16 @@ public class TimelineManager : IDisposable
         }
         else
         {
-            if (stack == byte.MaxValue)
+            if (stack == byte.MaxValue && Player.Object != null)
             {
                 // Replace LINQ with manual loop for better performance
                 stack = 0;
                 var statusList = Player.Object.StatusList;
                 for (int i = 0; i < statusList.Length; i++)
                 {
-                    if (statusList[i].StatusId == id)
+                    if (statusList[i] != null && statusList[i]!.StatusId == id)
                     {
-                        stack = (byte)statusList[i].Param;
+                        stack = (byte)statusList[i]!.Param;
                         break;
                     }
                 }
@@ -408,7 +408,7 @@ public class TimelineManager : IDisposable
             for (int i = 0; i < playerStatusList.Length; i++)
             {
                 var status = playerStatusList[i];
-                if (status.SourceId == playerGameObjectId)
+                if (status != null && status.SourceId == playerGameObjectId)
                 {
                     var statusSheet = Svc.Data.GetExcelSheet<Status>();
                     var statusRow = statusSheet?.GetRow(status.StatusId);
@@ -426,7 +426,7 @@ public class TimelineManager : IDisposable
                     }
                 }
             }
-            
+
             // Process target status list if available
             if (Svc.Objects.SearchById(targetId) is IBattleChara battleChar)
             {
@@ -434,7 +434,7 @@ public class TimelineManager : IDisposable
                 for (int i = 0; i < targetStatusList.Length; i++)
                 {
                     var status = targetStatusList[i];
-                    if (status.SourceId == playerGameObjectId)
+                    if (status != null && status.SourceId == playerGameObjectId)
                     {
                         var statusSheet = Svc.Data.GetExcelSheet<Status>();
                         var statusRow = statusSheet?.GetRow(status.StatusId);
@@ -456,9 +456,9 @@ public class TimelineManager : IDisposable
         });
     }
 
-    private async void OnActorControl(uint entityId, ActorControlCategory type, uint buffID, uint direct, uint actionId, uint sourceId, uint arg4, uint arg5, ulong targetId, byte a10)
+    private async void OnActorControl(uint entityId, ActorControlCategory type, uint buffID, uint direct, uint actionId, uint sourceId, uint arg7, uint arg8, uint arg9, uint arg10, ulong targetId, byte arg12)
     {
-        _onActorControlHook?.Original(entityId, type, buffID, direct, actionId, sourceId, arg4, arg5, targetId, a10);
+        _onActorControlHook?.Original(entityId, (uint)type, buffID, direct, actionId, sourceId, arg7, arg8, arg9, arg10, targetId, arg12);
 
         //#if DEBUG
         //        if (buffID == 122)
@@ -487,9 +487,9 @@ public class TimelineManager : IDisposable
                         var statusList = Player.Object.StatusList;
                         for (int i = 0; i < statusList.Length; i++)
                         {
-                            if (statusList[i].StatusId == buffID && statusList[i].SourceId == Player.Object.GameObjectId)
+                            if (statusList[i]!.StatusId == buffID && statusList[i]!.SourceId == Player.Object.GameObjectId)
                             {
-                                stack = statusList[i].Param;
+                                stack = statusList[i]!.Param;
                                 break;
                             }
                         }
@@ -508,10 +508,7 @@ public class TimelineManager : IDisposable
                             status = item;
                         }
                     }
-                    if (status != null)
-                    {
-                        status.TimeDuration = (float)(now - status.StartTime).TotalSeconds;
-                    }
+                    status?.TimeDuration = (float)(now - status.StartTime).TotalSeconds;
 
                     await Task.Delay(10).ConfigureAwait(false);
 
