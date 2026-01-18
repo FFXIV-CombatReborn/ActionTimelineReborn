@@ -1,4 +1,3 @@
-using ActionTimelineReborn.Timeline;
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Hooking;
 using Dalamud.Utility.Signatures;
@@ -6,9 +5,7 @@ using ECommons.DalamudServices;
 using ECommons.GameHelpers;
 using ECommons.Hooks;
 using ECommons.Hooks.ActionEffectTypes;
-using ECommons.Schedulers;
 using FFXIVClientStructs.FFXIV.Client.Game;
-using Lumina.Excel.Sheets;
 using Action = Lumina.Excel.Sheets.Action;
 using Status = Lumina.Excel.Sheets.Status;
 
@@ -30,7 +27,6 @@ public class TimelineManager : IDisposable
             Svc.Hook.InitializeFromAttributes(this);
             _onActorControlHook?.Enable();
             _onCastHook?.Enable();
-
             ActionEffect.ActionEffectEvent += ActionFromSelf;
         }
         catch (Exception e)
@@ -92,11 +88,15 @@ public class TimelineManager : IDisposable
 
     private delegate void OnActorControlDelegate(uint entityId, uint type, uint buffID, uint direct, uint actionId, uint sourceId, uint arg7, uint arg8, uint arg9, uint arg10, ulong targetId, byte arg12);
     [Signature("E8 ?? ?? ?? ?? 0F B7 0B 83 E9 64", DetourName = nameof(OnActorControl))]
-    private readonly Hook<OnActorControlDelegate>? _onActorControlHook = null;
+#pragma warning disable CS0649
+    private readonly Hook<OnActorControlDelegate>? _onActorControlHook;
+#pragma warning restore CS0649
 
     private delegate void OnCastDelegate(uint sourceId, IntPtr sourceCharacter);
     [Signature("40 53 57 48 81 EC ?? ?? ?? ?? 48 8B FA 8B D1", DetourName = nameof(OnCast))]
-    private readonly Hook<OnCastDelegate>? _onCastHook = null;
+#pragma warning disable CS0649
+    private readonly Hook<OnCastDelegate>? _onCastHook;
+#pragma warning restore CS0649
 
     public static SortedSet<ushort> ShowedStatusId { get; } = [];
     
@@ -114,7 +114,7 @@ public class TimelineManager : IDisposable
     private void AddItem(TimelineItem item)
     {
         if (item == null) return;
-        if (_items.Count >= kMaxItemCount)
+        if (_items.Count >= 2048)
         {
             _items.Dequeue();
         }
@@ -134,7 +134,20 @@ public class TimelineManager : IDisposable
 
     public List<TimelineItem> GetItems(DateTime time, out DateTime lastEndTime)
     {
-        return GetItems(_items, time, out lastEndTime);
+        var result = new List<TimelineItem>();
+        lastEndTime = DateTime.Now;
+        foreach (var item in _items)
+        {
+            if (item.EndTime > time)
+            {
+                result.Add(item);
+            }
+            else if (item.Type == TimelineItemType.GCD)
+            {
+                lastEndTime = item.EndTime;
+            }
+        }
+        return result;
     }
 
     private static readonly int kMaxStatusCount = 256;
@@ -184,28 +197,16 @@ public class TimelineManager : IDisposable
 
     private static TimelineItemType GetActionType(uint actionId, ActionType type)
     {
-        switch (type)
-        {
-            case ActionType.Action:
-                var action = Svc.Data.GetExcelSheet<Action>()?.GetRow(actionId);
-                if (action == null) break;
+        if (Svc.Data.GetExcelSheet<Action>()?.TryGetRow(actionId, out var action) != true)
+            return TimelineItemType.OGCD; // Default or fallback type
 
-                if (actionId == 3) return TimelineItemType.OGCD; //Sprint
+        if (actionId == 3) return TimelineItemType.OGCD; // Sprint
 
-                var actionCate = (ActionCate)(action.Value.ActionCategory.Value.RowId);
-
-                var isRealGcd = action.Value.CooldownGroup == GCDCooldownGroup || action.Value.AdditionalCooldownGroup == GCDCooldownGroup;
-                return actionCate == ActionCate.AutoAttack
-                    ? TimelineItemType.AutoAttack
-                    : !isRealGcd && actionCate == ActionCate.Ability ? TimelineItemType.OGCD
-                    : TimelineItemType.GCD;
-
-            case ActionType.Item:
-                var item = Svc.Data.GetExcelSheet<Item>()?.GetRow(actionId);
-                return item?.CastTimeSeconds > 0 ? TimelineItemType.GCD : TimelineItemType.OGCD;
-        }
-
-        return TimelineItemType.GCD;
+        var isRealGcd = action.CooldownGroup == GCDCooldownGroup || action.AdditionalCooldownGroup == GCDCooldownGroup;
+        return action.ActionCategory.Value.RowId == 1 // AutoAttack
+            ? TimelineItemType.AutoAttack
+            : !isRealGcd && action.ActionCategory.Value.RowId == 4 ? TimelineItemType.OGCD // Ability
+            : TimelineItemType.GCD;
     }
 
     private void CancelCasting()
@@ -258,9 +259,8 @@ public class TimelineManager : IDisposable
     {
         if (!Player.Available) return;
 
-#if DEBUG
-        //Svc.Chat.Print($"Id: {set.Header.ActionID}; {set.Header.ActionType}; Source: {set.Source.ObjectId}");
-#endif 
+        //Svc.Chat.Print($"Id: {set.Header.ActionID}; {set.Header.ActionType}; Source: {set.Source}");
+ 
         if (set.Source?.GameObjectId != Player.Object?.GameObjectId || !Plugin.Settings.Record) return;
 
         DamageType damage = DamageType.None;
@@ -456,93 +456,23 @@ public class TimelineManager : IDisposable
         });
     }
 
-    private async void OnActorControl(uint entityId, ActorControlCategory type, uint buffID, uint direct, uint actionId, uint sourceId, uint arg7, uint arg8, uint arg9, uint arg10, ulong targetId, byte arg12)
+    private void OnActorControl(uint entityId, uint type, uint buffID, uint direct, uint actionId, uint sourceId, uint arg7, uint arg8, uint arg9, uint arg10, ulong targetId, byte arg12)
     {
-        _onActorControlHook?.Original(entityId, (uint)type, buffID, direct, actionId, sourceId, arg7, arg8, arg9, arg10, targetId, arg12);
-
-        //#if DEBUG
-        //        if (buffID == 122)
-        //        {
-        //            Svc.Chat.Print($"Type: {type}, Buff: {buffID}, Direct: {direct}, Action: {actionId}, Source: {sourceId}, Arg4: {arg4}, Arg5: {arg5}, Target: {targetId}, a10: {a10}");
-        //        }
-        //#endif
+        _onActorControlHook?.Original(entityId, type, buffID, direct, actionId, sourceId, arg7, arg8, arg9, arg10, targetId, arg12);
 
         try
         {
             if (Player.Object == null || entityId != Player.Object.GameObjectId) return;
 
-            var record = Plugin.Settings.Record && sourceId == Player.Object.GameObjectId;
-
-            switch (type)
+            // CancelAbility ActorControlCategory value
+            if (type == 15)
             {
-                case ActorControlCategory.CancelAbility:
-                    CancelCasting();
-                    break;
-
-                case ActorControlCategory.LoseEffect when record:
-                    // Replace LINQ with manual loop for better performance
-                    var stack = 0;
-                    if (Player.Object != null)
-                    {
-                        var statusList = Player.Object.StatusList;
-                        for (int i = 0; i < statusList.Length; i++)
-                        {
-                            if (statusList[i]!.StatusId == buffID && statusList[i]!.SourceId == Player.Object.GameObjectId)
-                            {
-                                stack = statusList[i]!.Param;
-                                break;
-                            }
-                        }
-                    }
-
-                    var icon = GetStatusIcon((ushort)buffID, false, out var name, (byte)++stack);
-                    if (icon == 0) break;
-                    var now = DateTime.Now;
-
-                    //Refine Status - Replace LINQ with manual loop
-                    StatusLineItem? status = null;
-                    foreach (var item in _statusItems)
-                    {
-                        if (item.Icon == icon)
-                        {
-                            status = item;
-                        }
-                    }
-                    status?.TimeDuration = (float)(now - status.StartTime).TotalSeconds;
-
-                    await Task.Delay(10).ConfigureAwait(false);
-
-                    if (_lastItem != null && now < _lastTime)
-                    {
-                        _lastItem.StatusLoseIcon.Add((icon, name));
-                    }
-                    break;
-
-                //case ActorControlCategory.UpdateEffect:
-                //    await Task.Delay(10).ConfigureAwait(false);
-
-                //    icon = GetStatusIcon((ushort)direct, false, (byte)actionId);
-                //    if (icon != 0) _lastItem?.StatusLoseIcon.Add(icon);
-                //    break;
-
-                case ActorControlCategory.GainEffect when record:
-                    icon = GetStatusIcon((ushort)buffID, true, out name);
-                    if (icon == 0) break;
-                    now = DateTime.Now;
-                    await Task.Delay(10).ConfigureAwait(false);
-
-                    if (_lastItem != null && now < _lastTime + TimeSpan.FromSeconds(0.01))
-                    {
-                        _lastItem?.StatusGainIcon.Add((icon, name));
-                    }
-                    break;
-
+                CancelCasting();
             }
         }
-
         catch (Exception ex)
         {
-            Svc.Log.Warning(ex, "Something wrong with OnActorControl!");
+            Svc.Log.Error($"Error in OnActorControl: {ex.Message}");
         }
     }
 
