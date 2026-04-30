@@ -1,8 +1,6 @@
 using ActionTimelineReborn.Helpers;
 using ActionTimelineReborn.Configurations;
-using Dalamud.Interface.Internal;
 using Dalamud.Bindings.ImGui;
-using ImGuiScene;
 using System.Numerics;
 using Dalamud.Interface.Textures.TextureWraps;
 
