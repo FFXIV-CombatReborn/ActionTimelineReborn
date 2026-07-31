@@ -21,7 +21,10 @@ internal static class DrawHelper
 
     public static void DrawDamage(this ImDrawListPtr drawList, Vector2 position, float size, uint  lightCol)
     {
-        if(_roundTex == null) return;
+        if (_roundTex == null)
+        {
+            return;
+        }
 
         var pixPerUnit = size / 82;
 
