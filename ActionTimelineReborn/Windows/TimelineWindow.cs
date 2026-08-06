@@ -56,12 +56,18 @@ internal static class TimelineWindow
         var pos = ImGui.GetWindowPos();
         var size = ImGui.GetWindowSize();
 
-        var now = setting.IsRotation ? (TimelineManager.Instance?.EndTime ?? DateTime.Now - TimeSpan.FromSeconds(setting.TimeOffset)) : DateTime.Now;
+        var compensated = setting.UseLatencyCompensation;
+
+        var rotationEnd = compensated
+            ? TimelineManager.Instance?.CompensatedEndTime
+            : TimelineManager.Instance?.EndTime;
+
+        var now = setting.IsRotation ? (rotationEnd ?? DateTime.Now - TimeSpan.FromSeconds(setting.TimeOffset)) : DateTime.Now;
 
         var endTime = now - TimeSpan.FromSeconds((setting.IsHorizonal ? size.X : size.Y )/ setting.SizePerSecond - setting.TimeOffset);
 
         var last = now;
-        var list = TimelineManager.Instance?.GetItems(endTime, out last);
+        var list = TimelineManager.Instance?.GetItems(endTime, compensated, out last);
 
         var timeDirWhole = setting.IsHorizonal ? size.X * Vector2.UnitX : size.Y * Vector2.UnitY;
         var downDirWhole = setting.IsHorizonal ? size.Y * Vector2.UnitY : size.X * Vector2.UnitX;
@@ -78,7 +84,7 @@ internal static class TimelineWindow
             {
                 if (item.Type != TimelineItemType.GCD) continue;
 
-                var start = item.StartTime;
+                var start = item.DisplayStartTime(setting);
                 var span = start - last;
 
                 if (last != DateTime.MinValue && span >= threshold && span < max)
@@ -95,7 +101,7 @@ internal static class TimelineWindow
                         $"{(int)span.TotalMilliseconds}ms");
                 }
 
-                last = item.EndTime;
+                last = item.DisplayEndTime(setting);
             }
         }
 

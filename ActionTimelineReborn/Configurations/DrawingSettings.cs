@@ -79,6 +79,15 @@ public class DrawingSettings
     public Vector4 GridStartLineColor = new (0.3f, 0.5f, 0.2f, 1f);
     public Vector4 GridSubdivisionLineColor = new (0.3f, 0.3f, 0.3f, 0.2f);
 
+    /// <summary>
+    /// Experimental: draw this window on the press clock rather than the packet-arrival
+    /// clock. Requires <see cref="ExperimentalSettings.Enable"/>; ignored otherwise, so an
+    /// untouched window always renders exactly as it did before.
+    /// </summary>
+    public bool UseLatencyCompensationSetting = false;
+    public bool UseLatencyCompensation
+        => UseLatencyCompensationSetting && (Plugin.Settings?.Experimental?.Enable ?? false);
+
     public bool ShowGCDClippingSetting = true;
     public bool ShowGCDClipping => !IsRotation && ShowGCDClippingSetting;
     public float GCDClippingThreshold = 0.15f;

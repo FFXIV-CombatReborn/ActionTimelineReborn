@@ -65,12 +65,98 @@ namespace ActionTimelineReborn.Windows
                 Settings.TimelineSettings.Remove(removingSetting);
             }
 
+            if (ImGui.BeginTabItem("Experimental"))
+            {
+                DrawExperimentalSetting();
+                ImGui.EndTabItem();
+            }
+
             if (ImGui.BeginTabItem("Help"))
             {
                 DrawHelp();
                 ImGui.EndTabItem();
             }
             ImGui.EndTabBar();
+        }
+
+        private void DrawExperimentalSetting()
+        {
+            var experimental = Settings.Experimental;
+
+            ImGui.TextColored(ImGuiColors.DalamudOrange,
+                "EXPERIMENTAL - off by default. With this unchecked ActionTimelineReborn behaves exactly as it always has.");
+            ImGui.Separator();
+
+            ImGui.TextWrapped(
+                "Every time the plugin normally records comes from a server packet arriving, so it is your press " +
+                "plus your ping. BossMod's animation lock tweak re-anchors the real animation lock to the press, " +
+                "so with a high ping the drawn timeline lags what actually happened. This measures the delay per " +
+                "action and can redraw a timeline on the press clock instead.");
+
+            ImGui.NewLine();
+
+            ImGui.Checkbox("Enable latency compensation", ref experimental.Enable);
+            DrawHelper.SetTooltip("Master switch. While off no request timestamps are captured at all.");
+
+            if (!experimental.Enable) return;
+
+            ImGui.NewLine();
+
+            if (ImGui.Button("Add Compensated Timeline"))
+            {
+                Settings.TimelineSettings.Add(new DrawingSettings()
+                {
+                    Name = "Compensated",
+                    UseLatencyCompensationSetting = true,
+                });
+            }
+            DrawHelper.SetTooltip("Adds a second timeline window drawn on the press clock, so you can compare it " +
+                "against your existing one side by side. You can also tick the option per timeline in its General tab.");
+
+            ImGui.NewLine();
+
+            ImGui.SetNextItemWidth(120 * _scale);
+            ImGui.DragInt("Max Delay (ms)", ref experimental.MaxDelayMs, 1f, 100, 2000);
+            DrawHelper.SetTooltip("Measured delays above this are treated as a bad match and discarded in favour " +
+                "of the running average. Set this comfortably above your worst ping.");
+
+            ImGui.SetNextItemWidth(120 * _scale);
+            ImGui.DragFloat("Delay Smoothing", ref experimental.DelaySmoothing, 0.01f, 0f, 0.99f);
+            DrawHelper.SetTooltip("Smoothing for the running delay average. Higher is smoother and slower to react.");
+
+            ImGui.Checkbox("Average Fallback", ref experimental.FallbackToAverage);
+            DrawHelper.SetTooltip("Effects the server started on its own (damage over time ticks, auto attacks) " +
+                "carry no request of their own. Use the running average for those.");
+
+            ImGui.NewLine();
+
+            ImGui.Checkbox("Show Latency Band", ref experimental.ShowLatencyBand);
+            DrawHelper.SetTooltip("Draw the measured delay for each action as its own thin band, so the ping is " +
+                "still visible without being counted as a mistake.");
+            if (experimental.ShowLatencyBand)
+            {
+                ImGui.ColorEdit4("Latency Band Color", ref experimental.LatencyBandColor, ImGuiColorEditFlags.NoInputs);
+            }
+
+            ImGui.NewLine();
+            ImGui.Checkbox("Show Measurements", ref experimental.ShowDebugReadout);
+
+            if (!experimental.ShowDebugReadout) return;
+
+            var tracker = Experimental.LatencyTracker.Instance;
+            if (tracker == null)
+            {
+                ImGui.TextColored(ImGuiColors.DalamudRed, "Tracker not running.");
+                return;
+            }
+
+            ImGui.Separator();
+            ImGui.Text($"Measured delay   last {tracker.LastDelay * 1000f:F0} ms   average {tracker.AverageDelay * 1000f:F0} ms");
+            ImGui.Text($"Actions matched  {tracker.MatchedCount}   average fallback {tracker.FallbackCount}");
+            if (tracker.MatchedCount == 0)
+            {
+                ImGui.TextColored(ImGuiColors.DalamudYellow, "No actions measured yet - use an action in combat.");
+            }
         }
 
         private void DrawHelp() 
@@ -330,6 +416,16 @@ namespace ActionTimelineReborn.Windows
             ImGui.Checkbox("Is Rotation", ref settings.IsRotation);
             ImGui.Checkbox("Is Horizonal", ref settings.IsHorizonal);
             ImGui.Checkbox("Is Reverse", ref settings.IsReverse);
+
+            ImGui.NewLine();
+
+            ImGui.Checkbox("Latency Compensated (experimental)", ref settings.UseLatencyCompensationSetting);
+            DrawHelper.SetTooltip("Draw this window on the press clock instead of the packet-arrival clock. " +
+                "Has no effect unless latency compensation is enabled in the Experimental tab.");
+            if (settings.UseLatencyCompensationSetting && !(Plugin.Settings.Experimental?.Enable ?? false))
+            {
+                ImGui.TextColored(ImGuiColors.DalamudYellow, "Enable it in the Experimental tab first.");
+            }
 
             ImGui.NewLine();
 

@@ -18,6 +18,13 @@ public class Settings : IPluginConfiguration
     public bool PrintClipping = false;
     public int PrintClippingMin = 150;
     public int PrintClippingMax = 2000;
+
+    /// <summary>
+    /// Experimental latency compensation. Additive and off by default; see
+    /// <see cref="ExperimentalSettings"/>.
+    /// </summary>
+    public ExperimentalSettings Experimental { get; set; } = new();
+
     public int Version { get; set; } = 6;
 
     public void Save()

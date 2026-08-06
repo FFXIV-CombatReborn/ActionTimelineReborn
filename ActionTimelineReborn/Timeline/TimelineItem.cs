@@ -31,6 +31,29 @@ public class TimelineItem : ITimelineItem
 
     public DateTime EndTime => StartTime + TimeSpan.FromSeconds(TimeDuration);
 
+    /// <summary>
+    /// When this action's request left the client, if the experimental latency tracker
+    /// resolved one. Null means we only ever knew the packet-arrival time.
+    /// </summary>
+    public DateTime? RequestTime { get; set; }
+
+    /// <summary>Measured request-&gt;response delay in seconds, 0 when unknown.</summary>
+    public float NetworkDelay { get; set; }
+
+    public DateTime CompensatedStartTime => RequestTime ?? StartTime;
+
+    public DateTime CompensatedEndTime => CompensatedStartTime + TimeSpan.FromSeconds(TimeDuration);
+
+    /// <summary>
+    /// The start time this particular window should draw from. Windows that have not opted
+    /// into latency compensation always get the untouched arrival time.
+    /// </summary>
+    public DateTime DisplayStartTime(DrawingSettings setting)
+        => setting.UseLatencyCompensation ? CompensatedStartTime : StartTime;
+
+    public DateTime DisplayEndTime(DrawingSettings setting)
+        => setting.UseLatencyCompensation ? CompensatedEndTime : EndTime;
+
     public HashSet<(uint icon, string? name)> StatusGainIcon { get; } = new(4);
     public HashSet<(uint icon, string? name)> StatusLoseIcon { get;  } = new(4);
 
@@ -39,8 +62,8 @@ public class TimelineItem : ITimelineItem
         var rightCenter = windowPos + (setting.IsHorizonal
             ? new Vector2(windowSize.X, windowSize.Y / 2 + setting.CenterOffset)
             : new Vector2(windowSize.X / 2 + setting.CenterOffset, windowSize.Y));
-        rightCenter -= setting.TimeOffset * setting.TimeDirectionPerSecond; 
-        DrawItemWithCenter(rightCenter - (float)(time - StartTime).TotalSeconds * setting.TimeDirectionPerSecond, icon, setting);
+        rightCenter -= setting.TimeOffset * setting.TimeDirectionPerSecond;
+        DrawItemWithCenter(rightCenter - (float)(time - DisplayStartTime(setting)).TotalSeconds * setting.TimeDirectionPerSecond, icon, setting);
     }
 
     public void DrawItemWithCenter(Vector2 centerPos, TimelineLayer icon, DrawingSettings setting)
@@ -181,6 +204,18 @@ public class TimelineItem : ITimelineItem
                 drawList.AddRect(MinX(leftTop, min),
                      MinX(leftBottom + unitPerSecond * GCDTime, min),
                     GcdForeColor, rounding, flag, setting.GCDThickness);
+
+                //Network delay (experimental) - how long this action spent in flight.
+                //Only ever drawn on a window that opted into latency compensation.
+                var experimental = Plugin.Settings?.Experimental;
+                if (setting.UseLatencyCompensation && experimental is { ShowLatencyBand: true } && NetworkDelay > 0)
+                {
+                    var bandColor = ImGui.ColorConvertFloat4ToU32(experimental.LatencyBandColor);
+                    var bandThickness = iconSize * 0.08f;
+                    drawList.AddRectFilled(MinX(leftTop, min),
+                        MinX(leftTop + unitPerSecond * NetworkDelay + bandThickness * setting.RealDownDirection, min),
+                        bandColor, rounding, flag);
+                }
 
                 //Damage
                 if (setting.ShowDamageType)

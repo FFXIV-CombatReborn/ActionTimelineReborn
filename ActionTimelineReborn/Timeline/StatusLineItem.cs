@@ -15,6 +15,15 @@ public class StatusLineItem : ITimelineItem
 
     public DateTime EndTime => StartTime + TimeSpan.FromSeconds(TimeDuration);
 
+    /// <summary>
+    /// Press time of the action that applied this status, when the experimental latency
+    /// tracker resolved one. Keeps status bars aligned with their compensated action.
+    /// </summary>
+    public DateTime? RequestTime { get; set; }
+
+    public DateTime DisplayStartTime(DrawingSettings setting)
+        => setting.UseLatencyCompensation ? RequestTime ?? StartTime : StartTime;
+
     public byte Stack { get; set; }
 
     public void Draw(DateTime time, Vector2 windowPos, Vector2 windowSize, DrawingSettings setting)
@@ -23,7 +32,7 @@ public class StatusLineItem : ITimelineItem
             ? new Vector2(windowSize.X, windowSize.Y / 2 + setting.CenterOffset)
             : new Vector2(windowSize.X / 2 + setting.CenterOffset, windowSize.Y));
         rightCenter -= setting.TimeOffset * setting.TimeDirectionPerSecond;
-        DrawItemWithCenter(rightCenter - (float)(time - StartTime).TotalSeconds * setting.TimeDirectionPerSecond, windowPos, setting);
+        DrawItemWithCenter(rightCenter - (float)(time - DisplayStartTime(setting)).TotalSeconds * setting.TimeDirectionPerSecond, windowPos, setting);
     }
 
     public void DrawItemWithCenter(Vector2 centerPos, Vector2 windowPos, DrawingSettings setting)

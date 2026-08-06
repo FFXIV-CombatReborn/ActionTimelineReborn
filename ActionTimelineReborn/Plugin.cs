@@ -1,4 +1,5 @@
 using ActionTimelineReborn.Configurations;
+using ActionTimelineReborn.Experimental;
 using ActionTimelineReborn.Helpers;
 using ActionTimelineReborn.Timeline;
 using ActionTimelineReborn.Windows;
@@ -89,6 +90,12 @@ public class Plugin : IDalamudPlugin
         {
             Settings = new Settings();
         }
+
+        // Configs written before the experimental feature existed deserialize this as null.
+        Settings.Experimental ??= new ExperimentalSettings();
+
+        // Must come after Settings, since the tracker reads its enable flag every tick.
+        LatencyTracker.Initialize();
 
         CreateWindows();
         _settingsWindow.TitleBarButtons.Add(new TitleBarButton()
@@ -216,6 +223,8 @@ public class Plugin : IDalamudPlugin
         if (!disposing) return;
 
         Settings.Save();
+
+        LatencyTracker.Instance?.Dispose();
 
         TimelineManager.Instance?.Dispose();
 

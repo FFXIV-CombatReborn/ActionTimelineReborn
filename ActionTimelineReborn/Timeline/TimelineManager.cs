@@ -1,3 +1,4 @@
+using ActionTimelineReborn.Experimental;
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Hooking;
 using Dalamud.Utility.Signatures;
@@ -83,6 +84,7 @@ public class TimelineManager : IDisposable
         _lastItem = null;
         _lastTime = DateTime.MinValue;
         EndTime = DateTime.Now;
+        CompensatedEndTime = DateTime.Now;
     }
     #endregion
 
@@ -106,6 +108,13 @@ public class TimelineManager : IDisposable
     private static readonly Dictionary<uint, (string name, ushort icon, float castTime)> _itemCache = [];
 
     public DateTime EndTime { get; private set; } = DateTime.Now;
+
+    /// <summary>
+    /// Same as <see cref="EndTime"/> but on the press clock, for rotation-mode windows that
+    /// opted into latency compensation. Equal to <see cref="EndTime"/> while the
+    /// experimental feature is off.
+    /// </summary>
+    public DateTime CompensatedEndTime { get; private set; } = DateTime.Now;
     private static readonly int kMaxItemCount = 2048;
     private readonly Queue<TimelineItem> _items = new(kMaxItemCount);
     private TimelineItem? _lastItem = null;
@@ -123,8 +132,14 @@ public class TimelineManager : IDisposable
         {
             _lastItem = item;
             _lastTime = DateTime.Now;
-            UpdateEndTime(item.EndTime);
+            UpdateEndTime(item);
         }
+    }
+
+    private void UpdateEndTime(TimelineItem item)
+    {
+        UpdateEndTime(item.EndTime);
+        if (item.CompensatedEndTime > CompensatedEndTime) CompensatedEndTime = item.CompensatedEndTime;
     }
 
     private void UpdateEndTime(DateTime endTime)
@@ -132,19 +147,25 @@ public class TimelineManager : IDisposable
         if(endTime > EndTime) EndTime = endTime;
     }
 
-    public List<TimelineItem> GetItems(DateTime time, out DateTime lastEndTime)
+    /// <summary>
+    /// Collect the items visible after <paramref name="time"/>. <paramref name="compensated"/>
+    /// selects the press clock instead of the packet-arrival clock; the two are identical
+    /// unless the experimental latency feature resolved a request time for an item.
+    /// </summary>
+    public List<TimelineItem> GetItems(DateTime time, bool compensated, out DateTime lastEndTime)
     {
         var result = new List<TimelineItem>();
         lastEndTime = DateTime.Now;
         foreach (var item in _items)
         {
-            if (item.EndTime > time)
+            var itemEnd = compensated ? item.CompensatedEndTime : item.EndTime;
+            if (itemEnd > time)
             {
                 result.Add(item);
             }
             else if (item.Type == TimelineItemType.GCD)
             {
-                lastEndTime = item.EndTime;
+                lastEndTime = itemEnd;
             }
         }
         return result;
@@ -303,6 +324,17 @@ public class TimelineManager : IDisposable
         var now = DateTime.Now;
         var type = GetActionType(set.Header.ActionID, set.Header.ActionType);
 
+        // Experimental: recover the moment this action's request left the client. Returns
+        // false (leaving requestTime null) whenever the feature is off, so everything below
+        // falls back to the original packet-arrival behaviour.
+        DateTime? requestTime = null;
+        float networkDelay = 0;
+        if (LatencyTracker.Instance?.TryResolve(set.Header.SourceSequence, now, out var resolvedRequest, out var resolvedDelay) == true)
+        {
+            requestTime = resolvedRequest;
+            networkDelay = resolvedDelay;
+        }
+
         if (Plugin.Settings.PrintClipping && type == TimelineItemType.GCD)
         {
             // Replace LINQ with manual loop for better performance
@@ -317,7 +349,8 @@ public class TimelineManager : IDisposable
             
             if(lastGcd != null)
             {
-                var time = (int)(now - lastGcd.EndTime).TotalMilliseconds;
+                // Compensated times equal the raw ones while the experimental feature is off.
+                var time = (int)((requestTime ?? now) - lastGcd.CompensatedEndTime).TotalMilliseconds;
                 if(time >= Plugin.Settings.PrintClippingMin &&  time <= Plugin.Settings.PrintClippingMax)
                 {
                     Svc.Chat.Print($"Clipping: {time}ms ({lastGcd.Name} - {set.Name})");
@@ -339,6 +372,8 @@ public class TimelineManager : IDisposable
             AddItem(new TimelineItem()
             {
                 StartTime = now,
+                RequestTime = requestTime,
+                NetworkDelay = networkDelay,
                 AnimationLockTime = type == TimelineItemType.AutoAttack ? 0 : set.Header.AnimationLockTime,
                 GCDTime = type == TimelineItemType.GCD ? GCD : 0,
                 Type = type,
@@ -365,7 +400,7 @@ public class TimelineManager : IDisposable
 
         if (effectItem.Type is TimelineItemType.AutoAttack) return;
 
-        UpdateEndTime(effectItem.EndTime);
+        UpdateEndTime(effectItem);
 
         if (set.Header.TargetCount > 0)
         {
@@ -393,6 +428,7 @@ public class TimelineManager : IDisposable
                         TimeDuration = 6,
                         Stack = stack,
                         StartTime = effectItem.StartTime,
+                        RequestTime = effectItem.RequestTime,
                     };
                     list.Add(item);
                     AddItem(item);
@@ -488,12 +524,26 @@ public class TimelineManager : IDisposable
 
             var action = Svc.Data.GetExcelSheet<Action>()?.GetRow(actionId);
 
+            var castStart = DateTime.Now;
+
+            // The cast-start packet carries no source sequence of its own, so match the most
+            // recent outgoing request instead. No-op while the experimental feature is off.
+            DateTime? castRequestTime = null;
+            float castDelay = 0;
+            if (LatencyTracker.Instance?.TryResolveByRecency(castStart, out var resolvedCastRequest, out var resolvedCastDelay) == true)
+            {
+                castRequestTime = resolvedCastRequest;
+                castDelay = resolvedCastDelay;
+            }
+
             AddItem(new TimelineItem()
             {
                 Name =  action?.Name.ToString() ?? string.Empty,
                 Icon =  actionId == 4 ? (ushort)118 //Mount
                         : action?.Icon ?? 0,
-                StartTime = DateTime.Now,
+                StartTime = castStart,
+                RequestTime = castRequestTime,
+                NetworkDelay = castDelay,
                 GCDTime = GCD,
                 CastingTime = Player.Object.TotalCastTime - Player.Object.CurrentCastTime,
                 Type = TimelineItemType.GCD,
