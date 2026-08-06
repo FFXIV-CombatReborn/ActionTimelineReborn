@@ -37,6 +37,19 @@ public class ExperimentalSettings
     public bool FallbackToAverage = true;
 
     /// <summary>
+    /// Shift a live compensated window's clock back by the average delay, so the newest
+    /// action still appears at the leading edge instead of popping in already displaced.
+    ///
+    /// Drawing on the press clock is truthful but feels laggy: we only learn an action
+    /// happened when its packet returns, by which point the press is already the delay in
+    /// the past, so the icon materialises away from the edge. What actually removes the
+    /// false gaps is exact spacing *between* actions, and a constant shift preserves that
+    /// completely. This trades absolute wall-clock alignment, which buys nothing, for the
+    /// responsive feel of the original.
+    /// </summary>
+    public bool AnchorLatestToEdge = true;
+
+    /// <summary>
     /// Draw the measured network delay for each action as its own thin band, so the
     /// ping is still visible without being scored as a mistake.
     /// </summary>

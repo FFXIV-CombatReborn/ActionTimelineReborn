@@ -62,7 +62,21 @@ internal static class TimelineWindow
             ? TimelineManager.Instance?.CompensatedEndTime
             : TimelineManager.Instance?.EndTime;
 
-        var now = setting.IsRotation ? (rotationEnd ?? DateTime.Now - TimeSpan.FromSeconds(setting.TimeOffset)) : DateTime.Now;
+        var liveNow = DateTime.Now;
+
+        // A live compensated window draws on the press clock, but we only learn a press
+        // happened when its packet returns. Without this the newest icon appears already
+        // displaced from the leading edge and reads as lag. Shifting the whole window's
+        // clock by the average delay restores the leading-edge pop-in while leaving the
+        // spacing between actions - the part that actually removes the false gaps - exact.
+        if (compensated && !setting.IsRotation
+            && (Plugin.Settings?.Experimental?.AnchorLatestToEdge ?? false)
+            && Experimental.LatencyTracker.Instance is { MatchedCount: > 0 } tracker)
+        {
+            liveNow -= TimeSpan.FromSeconds(tracker.AverageDelay);
+        }
+
+        var now = setting.IsRotation ? (rotationEnd ?? liveNow - TimeSpan.FromSeconds(setting.TimeOffset)) : liveNow;
 
         var endTime = now - TimeSpan.FromSeconds((setting.IsHorizonal ? size.X : size.Y )/ setting.SizePerSecond - setting.TimeOffset);
 

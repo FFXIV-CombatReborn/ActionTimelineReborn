@@ -130,6 +130,16 @@ namespace ActionTimelineReborn.Windows
 
             ImGui.NewLine();
 
+            ImGui.Checkbox("Pin Newest To Leading Edge", ref experimental.AnchorLatestToEdge);
+            DrawHelper.SetTooltip("Shifts a live compensated window's clock back by the average delay so the " +
+                "newest action still appears at the leading edge.\n\n" +
+                "Without this the timeline is drawn on the true press clock, which is honest but feels laggy: " +
+                "the icon cannot be drawn until its packet returns, so it pops in already displaced.\n\n" +
+                "Spacing between actions stays exact either way, which is what removes the false red gaps. " +
+                "Only the absolute alignment to wall-clock now changes.");
+
+            ImGui.NewLine();
+
             ImGui.Checkbox("Show Latency Band", ref experimental.ShowLatencyBand);
             DrawHelper.SetTooltip("Draw the measured delay for each action as its own thin band, so the ping is " +
                 "still visible without being counted as a mistake.");
