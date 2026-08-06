@@ -42,6 +42,23 @@ public sealed class LatencyTracker : IDisposable
     /// <summary>Smoothed request-&gt;response delay in seconds.</summary>
     public float AverageDelay { get; private set; }
 
+    /// <summary>
+    /// The offset a live compensated window should shift its clock by, glided toward
+    /// <see cref="AverageDelay"/> a little each frame.
+    ///
+    /// Using the average directly makes the whole window lurch sideways whenever it
+    /// updates: it only changes when an action resolves, so a delay spike moves every icon
+    /// on screen by several pixels in a single frame. The average has to stay responsive
+    /// because it also places effects that carry no request of their own, so this is a
+    /// separate value that only ever moves smoothly.
+    /// </summary>
+    public float AnchorOffset { get; private set; }
+
+    /// <summary>Seconds for the anchor to close ~63% of the distance to the average.</summary>
+    private const float AnchorTimeConstant = 0.75f;
+
+    private bool _anchorPrimed;
+
     /// <summary>Most recent matched delay in seconds.</summary>
     public float LastDelay { get; private set; }
 
@@ -90,6 +107,8 @@ public sealed class LatencyTracker : IDisposable
 
         _wasEnabled = true;
 
+        UpdateAnchor(framework);
+
         if (!Player.Available)
         {
             _primed = false;
@@ -125,6 +144,30 @@ public sealed class LatencyTracker : IDisposable
         }
     }
 
+    private void UpdateAnchor(Dalamud.Plugin.Services.IFramework framework)
+    {
+        if (MatchedCount == 0) return;
+
+        // Snap on the first measurement, otherwise the window would visibly slide into
+        // place over the first second after the feature is switched on.
+        if (!_anchorPrimed)
+        {
+            AnchorOffset = AverageDelay;
+            _anchorPrimed = true;
+            return;
+        }
+
+        var dt = (float)framework.UpdateDelta.TotalSeconds;
+
+        // Ignore a stalled or paused frame rather than lurching the whole window at once.
+        if (dt <= 0f || dt > 1f) return;
+
+        // Time-constant based rather than a flat per-frame fraction, so the glide takes the
+        // same wall-clock time at 60fps and at 144fps.
+        var k = 1f - MathF.Exp(-dt / AnchorTimeConstant);
+        AnchorOffset += (AverageDelay - AnchorOffset) * k;
+    }
+
     private void Reset()
     {
         Array.Clear(_seq);
@@ -132,6 +175,8 @@ public sealed class LatencyTracker : IDisposable
         _head = 0;
         _primed = false;
         AverageDelay = 0;
+        AnchorOffset = 0;
+        _anchorPrimed = false;
         LastDelay = 0;
         MatchedCount = 0;
         FallbackCount = 0;

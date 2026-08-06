@@ -73,7 +73,9 @@ internal static class TimelineWindow
             && (Plugin.Settings?.Experimental?.AnchorLatestToEdge ?? false)
             && Experimental.LatencyTracker.Instance is { MatchedCount: > 0 } tracker)
         {
-            liveNow -= TimeSpan.FromSeconds(tracker.AverageDelay);
+            // AnchorOffset, not AverageDelay: the average steps whenever an action resolves,
+            // which would jerk every icon on screen sideways at once.
+            liveNow -= TimeSpan.FromSeconds(tracker.AnchorOffset);
         }
 
         var now = setting.IsRotation ? (rotationEnd ?? liveNow - TimeSpan.FromSeconds(setting.TimeOffset)) : liveNow;
