@@ -205,16 +205,22 @@ public class TimelineItem : ITimelineItem
                      MinX(leftBottom + unitPerSecond * GCDTime, min),
                     GcdForeColor, rounding, flag, setting.GCDThickness);
 
-                //Network delay (experimental) - how long this action spent in flight.
+                //Network delay (experimental) - how long this action spent in flight, drawn
+                //from the press to the moment the packet came back.
                 //Only ever drawn on a window that opted into latency compensation.
                 var experimental = Plugin.Settings?.Experimental;
                 if (setting.UseLatencyCompensation && experimental is { ShowLatencyBand: true } && NetworkDelay > 0)
                 {
+                    //Deliberately not clamped to `min` like the bars above. A typical delay is
+                    //only a few pixels wide, so clamping it past the icon's edge erases it
+                    //entirely. Give it its own lane just clear of the icon instead.
                     var bandColor = ImGui.ColorConvertFloat4ToU32(experimental.LatencyBandColor);
-                    var bandThickness = iconSize * 0.08f;
-                    drawList.AddRectFilled(MinX(leftTop, min),
-                        MinX(leftTop + unitPerSecond * NetworkDelay + bandThickness * setting.RealDownDirection, min),
-                        bandColor, rounding, flag);
+                    var bandThickness = MathF.Max(3f, iconSize * 0.1f);
+                    var bandStart = centerPos + (iconSize / 2 + 1) * setting.DownDirection;
+                    var bandEnd = bandStart + unitPerSecond * NetworkDelay + bandThickness * setting.DownDirection;
+                    //Min/Max so this survives vertical timelines and the reversed direction,
+                    //where the corners would otherwise come out inverted and not draw.
+                    drawList.AddRectFilled(Vector2.Min(bandStart, bandEnd), Vector2.Max(bandStart, bandEnd), bandColor);
                 }
 
                 //Damage

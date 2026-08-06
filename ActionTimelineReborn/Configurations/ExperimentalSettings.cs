@@ -19,8 +19,10 @@ public class ExperimentalSettings
     /// <summary>
     /// Measured request->response delays above this are treated as a bad match
     /// (sequence reuse, a stall, a loading screen) and discarded.
+    /// Raid latency spikes well past a nominal ping, so this has to sit comfortably
+    /// above the worst case or the spikiest actions are the ones that get thrown away.
     /// </summary>
-    public int MaxDelayMs = 600;
+    public int MaxDelayMs = 1200;
 
     /// <summary>
     /// Exponential smoothing factor for the running delay average, matching the
