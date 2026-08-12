@@ -1,10 +1,9 @@
-using ActionTimelineReborn.Helpers;
 using ActionTimelineReborn.Configurations;
-using Dalamud.Interface;
-using Dalamud.Interface.Internal;
+using ActionTimelineReborn.Helpers;
 using Dalamud.Bindings.ImGui;
-using System.Numerics;
+using Dalamud.Interface;
 using Dalamud.Interface.Textures.TextureWraps;
+using System.Numerics;
 
 namespace ActionTimelineReborn.Timeline;
 
@@ -32,21 +31,21 @@ public class TimelineItem : ITimelineItem
     public DateTime EndTime => StartTime + TimeSpan.FromSeconds(TimeDuration);
 
     public HashSet<(uint icon, string? name)> StatusGainIcon { get; } = new(4);
-    public HashSet<(uint icon, string? name)> StatusLoseIcon { get;  } = new(4);
+    public HashSet<(uint icon, string? name)> StatusLoseIcon { get; } = new(4);
 
     public void Draw(DateTime time, Vector2 windowPos, Vector2 windowSize, TimelineLayer icon, DrawingSettings setting)
     {
-        var rightCenter = windowPos + (setting.IsHorizonal
+        Vector2 rightCenter = windowPos + (setting.IsHorizonal
             ? new Vector2(windowSize.X, windowSize.Y / 2 + setting.CenterOffset)
             : new Vector2(windowSize.X / 2 + setting.CenterOffset, windowSize.Y));
-        rightCenter -= setting.TimeOffset * setting.TimeDirectionPerSecond; 
+        rightCenter -= setting.TimeOffset * setting.TimeDirectionPerSecond;
         DrawItemWithCenter(rightCenter - (float)(time - StartTime).TotalSeconds * setting.TimeDirectionPerSecond, icon, setting);
     }
 
     public void DrawItemWithCenter(Vector2 centerPos, TimelineLayer icon, DrawingSettings setting)
     {
-        var GcdSize = setting.GCDIconSize;
-        var drawList = ImGui.GetWindowDrawList();
+        int GcdSize = setting.GCDIconSize;
+        ImDrawListPtr drawList = ImGui.GetWindowDrawList();
 
         switch (Type)
         {
@@ -55,16 +54,16 @@ public class TimelineItem : ITimelineItem
                 break;
 
             case TimelineItemType.OGCD when setting.ShowOGCD:
-                var oGcdOffset = setting.OGCDOffset;
-                var oGcdSize = setting.OGCDIconSize;
-                var oGcdCenter = centerPos - (oGcdOffset * GcdSize + oGcdSize / 2) * setting.DownDirection;
+                float oGcdOffset = setting.OGCDOffset;
+                int oGcdSize = setting.OGCDIconSize;
+                Vector2 oGcdCenter = centerPos - (oGcdOffset * GcdSize + oGcdSize / 2) * setting.DownDirection;
                 DrawItemWithCenter(drawList, oGcdCenter, setting.TimeDirectionPerSecond, oGcdSize, icon, setting);
                 break;
 
             case TimelineItemType.AutoAttack when setting.ShowAutoAttack:
-                var autoAttackOffset = setting.AutoAttackOffset;
-                var autoAttackSize = setting.AutoAttackIconSize;
-                var autoAttackCenter = centerPos + (autoAttackOffset * GcdSize
+                float autoAttackOffset = setting.AutoAttackOffset;
+                int autoAttackSize = setting.AutoAttackIconSize;
+                Vector2 autoAttackCenter = centerPos + (autoAttackOffset * GcdSize
                     + (autoAttackSize + GcdSize) / 2) * setting.DownDirection;
                 DrawItemWithCenter(drawList, autoAttackCenter, setting.TimeDirectionPerSecond, autoAttackSize, icon, setting);
                 break;
@@ -73,11 +72,15 @@ public class TimelineItem : ITimelineItem
 
     private static (IDalamudTextureWrap texture, string? name)[] GetTextures(HashSet<(uint icon, string? name)> iconIds)
     {
-        var result = new List<(IDalamudTextureWrap texture, string? name)>(iconIds.Count);
-        foreach (var (icon, name) in iconIds)
+        List<(IDalamudTextureWrap texture, string? name)> result = new List<(IDalamudTextureWrap texture, string? name)>(iconIds.Count);
+        foreach ((uint icon, string? name) in iconIds)
         {
             IDalamudTextureWrap? texture = DrawHelper.GetTextureFromIconId(icon);
-            if (texture == null) continue;
+            if (texture == null)
+            {
+                continue;
+            }
+
             result.Add((texture, name));
         }
         return [.. result];
@@ -89,36 +92,42 @@ public class TimelineItem : ITimelineItem
         switch (icon)
         {
             case TimelineLayer.Icon:
-                var pos = centerPos - iconSize / 2 * setting.RealDownDirection;
+                Vector2 pos = centerPos - iconSize / 2 * setting.RealDownDirection;
                 drawList.DrawActionIcon(Icon, IsHq, pos, iconSize);
-                if (!string.IsNullOrEmpty(Name) && DrawHelper.IsInRect(pos, new Vector2( iconSize))) ImGui.SetTooltip(Name);
+                if (!string.IsNullOrEmpty(Name) && DrawHelper.IsInRect(pos, new Vector2(iconSize)))
+                {
+                    ImGui.SetTooltip(Name);
+                }
 
                 return;
 
             case TimelineLayer.Status when setting.ShowStatus:
-                var statusSize = setting.StatusIconSize;
-                var center = centerPos + setting.TimeDirection * iconSize / 2 - setting.DownDirection 
-                    * (iconSize / 2 + statusSize *(setting.IsHorizonal ? HeightRatio : 1) * (1 + setting.StatusOffset));
-                var gains = GetTextures(StatusGainIcon);
-                var lose = GetTextures(StatusLoseIcon);
-                var color = ImGui.ColorConvertFloat4ToU32(new Vector4(1, 1, 1, setting.StatusIconAlpha));
-                var gainColor = ImGui.ColorConvertFloat4ToU32(setting.StatusGainColor);
-                var loseColor = ImGui.ColorConvertFloat4ToU32(setting.StatusLoseColor);
+                int statusSize = setting.StatusIconSize;
+                Vector2 center = centerPos + setting.TimeDirection * iconSize / 2 - setting.DownDirection
+                    * (iconSize / 2 + statusSize * (setting.IsHorizonal ? HeightRatio : 1) * (1 + setting.StatusOffset));
+                (IDalamudTextureWrap texture, string? name)[] gains = GetTextures(StatusGainIcon);
+                (IDalamudTextureWrap texture, string? name)[] lose = GetTextures(StatusLoseIcon);
+                uint color = ImGui.ColorConvertFloat4ToU32(new Vector4(1, 1, 1, setting.StatusIconAlpha));
+                uint gainColor = ImGui.ColorConvertFloat4ToU32(setting.StatusGainColor);
+                uint loseColor = ImGui.ColorConvertFloat4ToU32(setting.StatusLoseColor);
 
-                var statusStep = setting.IsHorizonal ? statusSize : statusSize * HeightRatio;
+                float statusStep = setting.IsHorizonal ? statusSize : statusSize * HeightRatio;
                 center -= setting.TimeDirection * statusStep * (gains.Length + lose.Length) / 2;
                 if (setting.IsReverse)
                 {
-                    center += setting.DownDirection *(setting.IsHorizonal ? statusSize * HeightRatio : statusSize);
+                    center += setting.DownDirection * (setting.IsHorizonal ? statusSize * HeightRatio : statusSize);
                 }
                 for (int i = 0; i < gains.Length; i++)
                 {
-                    var size = new Vector2(statusSize, statusSize * HeightRatio);
+                    Vector2 size = new Vector2(statusSize, statusSize * HeightRatio);
                     drawList.AddImage(gains[i].texture.Handle, center,
                         center + size, Vector2.Zero, Vector2.One, color);
 
-                    var name = gains[i].name;
-                    if (!string.IsNullOrEmpty(name) && DrawHelper.IsInRect(center, size)) ImGui.SetTooltip(name);
+                    string? name = gains[i].name;
+                    if (!string.IsNullOrEmpty(name) && DrawHelper.IsInRect(center, size))
+                    {
+                        ImGui.SetTooltip(name);
+                    }
 
                     drawList.AddText(UiBuilder.IconFont, statusSize / 2f, center, gainColor, FontAwesomeIcon.Plus.ToIconString());
 
@@ -126,12 +135,15 @@ public class TimelineItem : ITimelineItem
                 }
                 for (int i = 0; i < lose.Length; i++)
                 {
-                    var size = new Vector2(statusSize, statusSize * HeightRatio);
+                    Vector2 size = new Vector2(statusSize, statusSize * HeightRatio);
                     drawList.AddImage(lose[i].texture.Handle, center,
                         center + size, Vector2.Zero, Vector2.One, color);
 
-                    var name = lose[i].name;
-                    if (!string.IsNullOrEmpty(name) && DrawHelper.IsInRect(center, size)) ImGui.SetTooltip(name);
+                    string? name = lose[i].name;
+                    if (!string.IsNullOrEmpty(name) && DrawHelper.IsInRect(center, size))
+                    {
+                        ImGui.SetTooltip(name);
+                    }
 
                     drawList.AddText(UiBuilder.IconFont, statusSize / 2f, center, loseColor, FontAwesomeIcon.Ban.ToIconString());
 
@@ -142,33 +154,33 @@ public class TimelineItem : ITimelineItem
 
             case TimelineLayer.General:
                 //Get Info.
-                float highPos = MathF.Min( setting.GCDHeightLow, setting.GCDHeightHigh);
+                float highPos = MathF.Min(setting.GCDHeightLow, setting.GCDHeightHigh);
                 float lowPos = MathF.Max(setting.GCDHeightLow, setting.GCDHeightHigh);
                 float rounding = setting.GCDRound;
 
-                var leftTop = centerPos + (highPos * iconSize - iconSize / 2) * setting.RealDownDirection;
-                var leftBottom = centerPos  + (lowPos * iconSize- iconSize / 2) * setting.RealDownDirection;
-                var flag = ImDrawFlags.RoundCornersAll;
+                Vector2 leftTop = centerPos + (highPos * iconSize - iconSize / 2) * setting.RealDownDirection;
+                Vector2 leftBottom = centerPos + (lowPos * iconSize - iconSize / 2) * setting.RealDownDirection;
+                ImDrawFlags flag = ImDrawFlags.RoundCornersAll;
 
-                var min = centerPos + iconSize / 2 * setting.TimeDirection;
+                Vector2 min = centerPos + iconSize / 2 * setting.TimeDirection;
 
                 //Background
-                var GcdBackColor = ImGui.ColorConvertFloat4ToU32(setting.BackgroundColor);
+                uint GcdBackColor = ImGui.ColorConvertFloat4ToU32(setting.BackgroundColor);
                 drawList.AddRectFilled(MinX(leftTop, min), MinX(leftBottom + unitPerSecond * MathF.Max(GCDTime, setting.ShowAnimationLock ? CastingTime + AnimationLockTime : CastingTime), min), GcdBackColor, rounding, flag);
 
-                var castOffset = unitPerSecond * CastingTime;
+                Vector2 castOffset = unitPerSecond * CastingTime;
 
                 //AnimationLock
                 if (setting.ShowAnimationLock)
                 {
-                    var animationLockColor = ImGui.ColorConvertFloat4ToU32(setting.AnimationLockColor);
+                    uint animationLockColor = ImGui.ColorConvertFloat4ToU32(setting.AnimationLockColor);
                     drawList.AddRectFilled(MinX(leftTop, min),
                         MinX(leftBottom + castOffset + unitPerSecond * AnimationLockTime, min),
                         animationLockColor, rounding, flag);
                 }
 
                 //Casting
-                var castColor = State switch
+                uint castColor = State switch
                 {
                     TimelineItemState.Canceled => ImGui.ColorConvertFloat4ToU32(setting.CastCanceledColor),
                     TimelineItemState.Casting => ImGui.ColorConvertFloat4ToU32(setting.CastInProgressColor),
@@ -177,7 +189,7 @@ public class TimelineItem : ITimelineItem
                 drawList.AddRectFilled(MinX(leftTop, min), MinX(leftBottom + castOffset, min), castColor, rounding, flag);
 
                 //GCD Fore
-                var GcdForeColor = ImGui.ColorConvertFloat4ToU32(setting.GCDBorderColor);
+                uint GcdForeColor = ImGui.ColorConvertFloat4ToU32(setting.GCDBorderColor);
                 drawList.AddRect(MinX(leftTop, min),
                      MinX(leftBottom + unitPerSecond * GCDTime, min),
                     GcdForeColor, rounding, flag, setting.GCDThickness);
@@ -185,7 +197,7 @@ public class TimelineItem : ITimelineItem
                 //Damage
                 if (setting.ShowDamageType)
                 {
-                    var lightCol = Damage switch
+                    uint lightCol = Damage switch
                     {
                         DamageType.Critical => ImGui.ColorConvertFloat4ToU32(setting.CriticalColor),
                         DamageType.Direct => ImGui.ColorConvertFloat4ToU32(setting.DirectColor),

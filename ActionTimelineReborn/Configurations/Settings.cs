@@ -1,5 +1,4 @@
-﻿using ActionTimelineReborn.Configurations;
-using Dalamud.Configuration;
+﻿using Dalamud.Configuration;
 using ECommons.DalamudServices;
 
 namespace ActionTimelineReborn.Configurations;

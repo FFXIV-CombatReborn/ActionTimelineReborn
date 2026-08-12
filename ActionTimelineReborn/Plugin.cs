@@ -1,5 +1,4 @@
 using ActionTimelineReborn.Configurations;
-using ActionTimelineReborn.Helpers;
 using ActionTimelineReborn.Timeline;
 using ActionTimelineReborn.Windows;
 using Dalamud.Bindings.ImGui;
@@ -12,7 +11,6 @@ using ECommons.Commands;
 using ECommons.DalamudServices;
 using ECommons.GameHelpers;
 using System.Diagnostics;
-using static Dalamud.Interface.Windowing.Window;
 
 namespace ActionTimelineReborn;
 
@@ -79,7 +77,6 @@ public class Plugin : IDalamudPlugin
         Svc.PluginInterface.UiBuilder.OpenConfigUi += OpenConfigUi;
 
         TimelineManager.Initialize();
-        DrawHelper.Init();
 
         try
         {
@@ -132,17 +129,17 @@ public class Plugin : IDalamudPlugin
     [SubCmd("unlock", "Unlock all windows")]
     private static void PluginCommand(string command, string arguments)
     {
-        var sub = arguments.Split(' ').FirstOrDefault();
-        if(string.Equals("unlock", sub, StringComparison.OrdinalIgnoreCase))
+        string? sub = arguments.Split(' ').FirstOrDefault();
+        if (string.Equals("unlock", sub, StringComparison.OrdinalIgnoreCase))
         {
-            foreach (var setting in Settings.TimelineSettings)
+            foreach (DrawingSettings setting in Settings.TimelineSettings)
             {
                 setting.Locked = false;
             }
         }
         else if (string.Equals("lock", sub, StringComparison.OrdinalIgnoreCase))
         {
-            foreach (var setting in Settings.TimelineSettings)
+            foreach (DrawingSettings setting in Settings.TimelineSettings)
             {
                 setting.Locked = true;
             }
@@ -163,15 +160,25 @@ public class Plugin : IDalamudPlugin
 
     private void Draw()
     {
-        if (Settings == null || !Player.Available) return;
-        if (Svc.GameGui.GameUiHidden) return;
+        if (Settings == null || !Player.Available)
+        {
+            return;
+        }
+
+        if (Svc.GameGui.GameUiHidden)
+        {
+            return;
+        }
 
         _windowSystem?.Draw();
 
-        if (!ShowTimeline()) return;
+        if (!ShowTimeline())
+        {
+            return;
+        }
 
         int index = 0;
-        foreach (var setting in Settings.TimelineSettings)
+        foreach (DrawingSettings setting in Settings.TimelineSettings)
         {
             TimelineWindow.Draw(setting, index++);
         }
@@ -189,15 +196,15 @@ public class Plugin : IDalamudPlugin
             return false;
         }
 
-        if (Settings.HideTimelineInCutscene 
-            && (Svc.Condition[ConditionFlag.WatchingCutscene] 
+        if (Settings.HideTimelineInCutscene
+            && (Svc.Condition[ConditionFlag.WatchingCutscene]
             || Svc.Condition[ConditionFlag.WatchingCutscene78]
             || Svc.Condition[ConditionFlag.OccupiedInCutSceneEvent]))
         {
             return false;
         }
 
-        if (Settings.HideTimelineInQuestEvent 
+        if (Settings.HideTimelineInQuestEvent
             && (Svc.Condition[ConditionFlag.OccupiedInQuestEvent]))
         {
             return false;
@@ -213,7 +220,10 @@ public class Plugin : IDalamudPlugin
 
     protected virtual void Dispose(bool disposing)
     {
-        if (!disposing) return;
+        if (!disposing)
+        {
+            return;
+        }
 
         Settings.Save();
 

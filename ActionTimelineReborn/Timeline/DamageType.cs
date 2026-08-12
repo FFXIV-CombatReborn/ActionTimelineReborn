@@ -1,7 +1,7 @@
 ﻿namespace ActionTimelineReborn.Timeline;
 
 [Flags]
-public enum DamageType: byte
+public enum DamageType : byte
 {
     None = 0,
     Direct = 1 << 0,

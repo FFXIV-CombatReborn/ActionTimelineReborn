@@ -1,14 +1,15 @@
+using ActionTimelineReborn.Configurations;
 using ActionTimelineReborn.Helpers;
 using ActionTimelineReborn.Timeline;
-using ActionTimelineReborn.Configurations;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Colors;
+using Dalamud.Interface.Textures.TextureWraps;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Windowing;
 using Dalamud.Utility;
 using ECommons.Commands;
 using ECommons.DalamudServices;
-using Dalamud.Bindings.ImGui;
 using Lumina.Excel.Sheets;
 using System.Numerics;
 
@@ -34,7 +35,10 @@ namespace ActionTimelineReborn.Windows
 
         public override void Draw()
         {
-            if (!ImGui.BeginTabBar("ActionTimelineReborn Bar")) return;
+            if (!ImGui.BeginTabBar("ActionTimelineReborn Bar"))
+            {
+                return;
+            }
 
             if (ImGui.BeginTabItem("General"))
             {
@@ -45,9 +49,12 @@ namespace ActionTimelineReborn.Windows
             int index = 0;
             DrawingSettings? removingSetting = null;
 
-            if (Settings.TimelineSettings.Count == 0) Settings.TimelineSettings.Add(new DrawingSettings());
+            if (Settings.TimelineSettings.Count == 0)
+            {
+                Settings.TimelineSettings.Add(new DrawingSettings());
+            }
 
-            foreach (var setting in Settings.TimelineSettings)
+            foreach (DrawingSettings setting in Settings.TimelineSettings)
             {
                 if (ImGui.BeginTabItem($"TL:{index}"))
                 {
@@ -60,7 +67,7 @@ namespace ActionTimelineReborn.Windows
                 index++;
             }
 
-            if(removingSetting != null)
+            if (removingSetting != null)
             {
                 Settings.TimelineSettings.Remove(removingSetting);
             }
@@ -73,7 +80,7 @@ namespace ActionTimelineReborn.Windows
             ImGui.EndTabBar();
         }
 
-        private void DrawHelp() 
+        private void DrawHelp()
         {
             ImGui.PushFont(UiBuilder.IconFont);
             if (ImGui.Button($"{FontAwesomeIcon.Code.ToIconString()}##Github"))
@@ -131,7 +138,7 @@ namespace ActionTimelineReborn.Windows
             }
 
             ImGui.NewLine();
-            
+
             // Clear All Data button with warning color
             ImGui.PushStyleColor(ImGuiCol.Button, 0xFF4444AA);
             ImGui.PushStyleColor(ImGuiCol.ButtonActive, 0xFF3333DD);
@@ -143,24 +150,27 @@ namespace ActionTimelineReborn.Windows
             }
             ImGui.PopStyleColor(3);
             DrawHelper.SetTooltip("Clears all recorded timeline data and caches. This will free memory and reset the timeline.");
-            
+
             ImGui.NewLine();
             ImGui.Checkbox("Record Target Status", ref Settings.RecordTargetStatus);
 
-            var index = 0;
+            int index = 0;
 
-            if(ImGui.CollapsingHeader("Showed Statuses"))
+            if (ImGui.CollapsingHeader("Showed Statuses"))
             {
-                foreach (var statusId in TimelineManager.ShowedStatusId)
+                foreach (ushort statusId in TimelineManager.ShowedStatusId)
                 {
-                    var status = Svc.Data.GetExcelSheet<Status>()?.GetRow(statusId);
-                    var texture = DrawHelper.GetTextureFromIconId(status?.Icon ?? 0);
+                    Status? status = Svc.Data.GetExcelSheet<Status>()?.GetRow(statusId);
+                    IDalamudTextureWrap? texture = DrawHelper.GetTextureFromIconId(status?.Icon ?? 0);
                     if (texture != null)
                     {
                         ImGui.Image(texture.Handle, new Vector2(18, 24));
-                        var tips = $"{status?.Name ?? string.Empty} [{status?.RowId ?? 0}]";
+                        string tips = $"{status?.Name ?? string.Empty} [{status?.RowId ?? 0}]";
                         DrawHelper.SetTooltip(tips);
-                        if (++index % 10 != 0) ImGui.SameLine();
+                        if (++index % 10 != 0)
+                        {
+                            ImGui.SameLine();
+                        }
                     }
                 }
             }
@@ -174,10 +184,10 @@ namespace ActionTimelineReborn.Windows
             {
                 ushort removeId = 0, addId = 0;
                 index = 0;
-                foreach (var statusId in Plugin.Settings.HideStatusIds)
+                foreach (ushort statusId in Plugin.Settings.HideStatusIds)
                 {
-                    var status = Svc.Data.GetExcelSheet<Status>()?.GetRow(statusId);
-                    var texture = DrawHelper.GetTextureFromIconId(status?.Icon ?? 0);
+                    Status? status = Svc.Data.GetExcelSheet<Status>()?.GetRow(statusId);
+                    IDalamudTextureWrap? texture = DrawHelper.GetTextureFromIconId(status?.Icon ?? 0);
                     if (texture != null)
                     {
                         ImGui.Image(texture.Handle, new Vector2(24, 30));
@@ -185,9 +195,9 @@ namespace ActionTimelineReborn.Windows
                         ImGui.SameLine();
                     }
 
-                    var id = statusId.ToString();
+                    string id = statusId.ToString();
                     ImGui.SetNextItemWidth(100 * _scale);
-                    if (ImGui.InputText($"##Status{index++}", ref id, 8) && ushort.TryParse(id, out var newId))
+                    if (ImGui.InputText($"##Status{index++}", ref id, 8) && ushort.TryParse(id, out ushort newId))
                     {
                         removeId = statusId;
                         addId = newId;
@@ -202,9 +212,9 @@ namespace ActionTimelineReborn.Windows
                     }
                     ImGui.PopFont();
                 }
-                var oneId = string.Empty;
+                string oneId = string.Empty;
                 ImGui.SetNextItemWidth(100 * _scale);
-                if (ImGui.InputText($"##AddOne", ref oneId, 8) && ushort.TryParse(oneId, out var newOneId))
+                if (ImGui.InputText($"##AddOne", ref oneId, 8) && ushort.TryParse(oneId, out ushort newOneId))
                 {
                     _aboutAdd = newOneId;
                 }
@@ -232,7 +242,7 @@ namespace ActionTimelineReborn.Windows
         #region Timeline
         private bool DrawTimelineSetting(DrawingSettings settings)
         {
-            var result = false;
+            bool result = false;
             if (!ImGui.BeginTabBar("##Timeline_Settings_TabBar"))
             {
                 return result;
@@ -291,7 +301,10 @@ namespace ActionTimelineReborn.Windows
 
             bool result = false;
 
-            if (isLast) ImGui.PushStyleColor(ImGuiCol.Text, isTime ? ImGuiColors.HealerGreen : ImGuiColors.DPSRed);
+            if (isLast)
+            {
+                ImGui.PushStyleColor(ImGuiCol.Text, isTime ? ImGuiColors.HealerGreen : ImGuiColors.DPSRed);
+            }
 
             ImGui.PushFont(UiBuilder.IconFont);
             if (ImGui.Button($"{(isLast ? FontAwesomeIcon.Check : FontAwesomeIcon.Ban).ToIconString()}##Remove{name}"))
@@ -317,14 +330,18 @@ namespace ActionTimelineReborn.Windows
                 : "Click to remove this timeline.");
             }
 
-            if (isLast) ImGui.PopStyleColor();
+            if (isLast)
+            {
+                ImGui.PopStyleColor();
+            }
+
             return result;
         }
 
         private bool DrawGeneralTab(DrawingSettings settings)
         {
             ImGui.InputText("Name", ref settings.Name, 32);
-            var result = Plugin.Settings.TimelineSettings.Count > 1 && RemoveValue(settings.Name);
+            bool result = Plugin.Settings.TimelineSettings.Count > 1 && RemoveValue(settings.Name);
 
             ImGui.Checkbox("Enable", ref settings.Enable);
             ImGui.Checkbox("Is Rotation", ref settings.IsRotation);
@@ -446,7 +463,8 @@ namespace ActionTimelineReborn.Windows
             ImGui.DragFloat("Start Line Width", ref settings.GridStartLineWidth, 0.1f, 0.1f, 10);
             ImGui.ColorEdit4("Start Line Color", ref settings.GridStartLineColor, ImGuiColorEditFlags.NoInputs);
 
-            if (!settings.ShowGrid) { return; }
+            if (!settings.ShowGrid)
+            { return; }
             ImGui.NewLine();
 
             ImGui.Checkbox("Show Center Line", ref settings.ShowGridCenterLine);
@@ -466,14 +484,16 @@ namespace ActionTimelineReborn.Windows
             ImGui.NewLine();
             ImGui.Checkbox("Divide By Seconds", ref settings.GridDivideBySeconds);
 
-            if (!settings.GridDivideBySeconds) { return; }
+            if (!settings.GridDivideBySeconds)
+            { return; }
 
             ImGui.Checkbox("Show Text", ref settings.GridShowSecondsText);
 
             ImGui.NewLine();
             ImGui.Checkbox("Sub-Divide By Seconds", ref settings.GridSubdivideSeconds);
 
-            if (!settings.GridSubdivideSeconds) { return; }
+            if (!settings.GridSubdivideSeconds)
+            { return; }
 
             ImGui.DragInt("Sub-Division Count", ref settings.GridSubdivisionCount, 0.2f, 2, 8);
             ImGui.DragFloat("Sub-Division Line Width", ref settings.GridSubdivisionLineWidth, 0.5f, 1, 5);
@@ -485,7 +505,10 @@ namespace ActionTimelineReborn.Windows
             ImGui.Checkbox("Enabled", ref settings.ShowGCDClippingSetting);
             DrawHelper.SetTooltip("This only shown when timeline is not rotation.");
 
-            if (!settings.ShowGCDClipping) return;
+            if (!settings.ShowGCDClipping)
+            {
+                return;
+            }
 
             int clippingThreshold = (int)(settings.GCDClippingThreshold * 1000f);
             if (ImGui.DragInt("Threshold (ms)", ref clippingThreshold, 0.1f, 0, 1000))
