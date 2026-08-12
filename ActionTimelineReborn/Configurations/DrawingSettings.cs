@@ -17,8 +17,8 @@ public class DrawingSettings
     public Vector2 RealDownDirection => IsHorizonal ? Vector2.UnitY : Vector2.UnitX;
 
     public bool Locked = false;
-    public Vector4 LockedBackgroundColor = new (0f, 0f, 0f, 0.5f);
-    public Vector4 UnlockedBackgroundColor = new (0f, 0f, 0f, 0.75f);
+    public Vector4 LockedBackgroundColor = new(0f, 0f, 0f, 0.5f);
+    public Vector4 UnlockedBackgroundColor = new(0f, 0f, 0f, 0.75f);
 
     public float SizePerSecond = 60;
     public float CenterOffset = 0;
@@ -47,19 +47,19 @@ public class DrawingSettings
     public Vector4 CriticalColor = ImGuiColors.DalamudOrange;
     public Vector4 CriticalDirectColor = ImGuiColors.DPSRed;
 
-    public Vector4 BackgroundColor = new (0.5f, 0.5f, 0.5f, 0.5f);
-    public Vector4 GCDBorderColor = new (0.9f, 0.9f, 0.9f, 1f);
+    public Vector4 BackgroundColor = new(0.5f, 0.5f, 0.5f, 0.5f);
+    public Vector4 GCDBorderColor = new(0.9f, 0.9f, 0.9f, 1f);
     public float GCDThickness = 1.5f;
     public float GCDHeightLow = 0.5f;
     public float GCDHeightHigh = 0.8f;
     public float GCDRound = 2;
 
-    public Vector4 CastInProgressColor = new (0.2f, 0.8f, 0.2f, 1f);
-    public Vector4 CastFinishedColor = new (0.5f, 0.5f, 0.5f, 1f);
-    public Vector4 CastCanceledColor = new (0.8f, 0.2f, 0.2f, 1f);
+    public Vector4 CastInProgressColor = new(0.2f, 0.8f, 0.2f, 1f);
+    public Vector4 CastFinishedColor = new(0.5f, 0.5f, 0.5f, 1f);
+    public Vector4 CastCanceledColor = new(0.8f, 0.2f, 0.2f, 1f);
 
     public bool ShowAnimationLock = true;
-    public Vector4 AnimationLockColor = new (0.8f, 0.7f, 0.6f, 1f);
+    public Vector4 AnimationLockColor = new(0.8f, 0.7f, 0.6f, 1f);
 
     public bool ShowStatusLine = true;
     public float StatusLineSize = 18;
@@ -74,15 +74,15 @@ public class DrawingSettings
     public float GridCenterLineWidth = 1f;
     public float GridStartLineWidth = 3;
     public float GridSubdivisionLineWidth = 1;
-    public Vector4 GridLineColor = new (0.3f, 0.3f, 0.3f, 1f);
-    public Vector4 GridCenterLineColor = new (0.5f, 0.5f, 0.5f, 0.3f);
-    public Vector4 GridStartLineColor = new (0.3f, 0.5f, 0.2f, 1f);
-    public Vector4 GridSubdivisionLineColor = new (0.3f, 0.3f, 0.3f, 0.2f);
+    public Vector4 GridLineColor = new(0.3f, 0.3f, 0.3f, 1f);
+    public Vector4 GridCenterLineColor = new(0.5f, 0.5f, 0.5f, 0.3f);
+    public Vector4 GridStartLineColor = new(0.3f, 0.5f, 0.2f, 1f);
+    public Vector4 GridSubdivisionLineColor = new(0.3f, 0.3f, 0.3f, 0.2f);
 
     public bool ShowGCDClippingSetting = true;
     public bool ShowGCDClipping => !IsRotation && ShowGCDClippingSetting;
     public float GCDClippingThreshold = 0.15f;
     public int GCDClippingMaxTime = 2;
-    public Vector4 GCDClippingColor = new (1f, 0.2f, 0.2f, 0.3f);
-    public Vector4 GCDClippingTextColor = new (0.9f, 0.9f, 0.9f, 1f);
+    public Vector4 GCDClippingColor = new(1f, 0.2f, 0.2f, 0.3f);
+    public Vector4 GCDClippingTextColor = new(0.9f, 0.9f, 0.9f, 1f);
 }

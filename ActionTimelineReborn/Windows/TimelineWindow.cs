@@ -1,7 +1,7 @@
-using ActionTimelineReborn.Timeline;
 using ActionTimelineReborn.Configurations;
-using Dalamud.Interface.Utility;
+using ActionTimelineReborn.Timeline;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface.Utility;
 using System.Numerics;
 
 namespace ActionTimelineReborn.Windows;
@@ -16,9 +16,12 @@ internal static class TimelineWindow
 
     public static void Draw(DrawingSettings setting, int index)
     {
-        if (!setting.Enable || string.IsNullOrEmpty(setting.Name)) return;
+        if (!setting.Enable || string.IsNullOrEmpty(setting.Name))
+        {
+            return;
+        }
 
-        var flag = _baseFlags;
+        ImGuiWindowFlags flag = _baseFlags;
         if (setting.Locked)
         {
             flag |= ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoMouseInputs;
@@ -53,44 +56,47 @@ internal static class TimelineWindow
                 Plugin.OpenConfigUi();
             }
         }
-        var pos = ImGui.GetWindowPos();
-        var size = ImGui.GetWindowSize();
+        Vector2 pos = ImGui.GetWindowPos();
+        Vector2 size = ImGui.GetWindowSize();
 
-        var now = setting.IsRotation ? (TimelineManager.Instance?.EndTime ?? DateTime.Now - TimeSpan.FromSeconds(setting.TimeOffset)) : DateTime.Now;
+        DateTime now = setting.IsRotation ? (TimelineManager.Instance?.EndTime ?? DateTime.Now - TimeSpan.FromSeconds(setting.TimeOffset)) : DateTime.Now;
 
-        var endTime = now - TimeSpan.FromSeconds((setting.IsHorizonal ? size.X : size.Y )/ setting.SizePerSecond - setting.TimeOffset);
+        DateTime endTime = now - TimeSpan.FromSeconds((setting.IsHorizonal ? size.X : size.Y) / setting.SizePerSecond - setting.TimeOffset);
 
-        var last = now;
-        var list = TimelineManager.Instance?.GetItems(endTime, out last);
+        DateTime last = now;
+        List<TimelineItem>? list = TimelineManager.Instance?.GetItems(endTime, out last);
 
-        var timeDirWhole = setting.IsHorizonal ? size.X * Vector2.UnitX : size.Y * Vector2.UnitY;
-        var downDirWhole = setting.IsHorizonal ? size.Y * Vector2.UnitY : size.X * Vector2.UnitX;
+        Vector2 timeDirWhole = setting.IsHorizonal ? size.X * Vector2.UnitX : size.Y * Vector2.UnitY;
+        Vector2 downDirWhole = setting.IsHorizonal ? size.Y * Vector2.UnitY : size.X * Vector2.UnitX;
 
         DrawGrid(pos, timeDirWhole, downDirWhole, setting);
 
         if (setting.ShowGCDClipping && list != null) //Clipping
         {
-            var gcdClippingColor = ImGui.ColorConvertFloat4ToU32(setting.GCDClippingColor);
-            var threshold = TimeSpan.FromSeconds(setting.GCDClippingThreshold);
-            var max = TimeSpan.FromSeconds(setting.GCDClippingMaxTime);
+            uint gcdClippingColor = ImGui.ColorConvertFloat4ToU32(setting.GCDClippingColor);
+            TimeSpan threshold = TimeSpan.FromSeconds(setting.GCDClippingThreshold);
+            TimeSpan max = TimeSpan.FromSeconds(setting.GCDClippingMaxTime);
 
-            foreach (var item in list)
+            foreach (TimelineItem item in list)
             {
-                if (item.Type != TimelineItemType.GCD) continue;
+                if (item.Type != TimelineItemType.GCD)
+                {
+                    continue;
+                }
 
-                var start = item.StartTime;
-                var span = start - last;
+                DateTime start = item.StartTime;
+                TimeSpan span = start - last;
 
                 if (last != DateTime.MinValue && span >= threshold && span < max)
                 {
-                    var drawingLeftTop = pos + timeDirWhole
+                    Vector2 drawingLeftTop = pos + timeDirWhole
                         - (setting.TimeOffset + (float)(now - last).TotalSeconds) * setting.TimeDirectionPerSecond;
-                    
+
 
                     ImGui.GetWindowDrawList().AddRectFilled(drawingLeftTop, drawingLeftTop
-                        + downDirWhole + (float)span.TotalSeconds * setting.TimeDirectionPerSecond 
+                        + downDirWhole + (float)span.TotalSeconds * setting.TimeDirectionPerSecond
                        , gcdClippingColor);
-                    ImGui.GetWindowDrawList().AddText(drawingLeftTop, 
+                    ImGui.GetWindowDrawList().AddText(drawingLeftTop,
                         ImGui.ColorConvertFloat4ToU32(setting.GCDClippingTextColor),
                         $"{(int)span.TotalMilliseconds}ms");
                 }
@@ -101,25 +107,25 @@ internal static class TimelineWindow
 
         if (list != null)
         {
-            foreach (var item in list)
+            foreach (TimelineItem item in list)
             {
                 item.Draw(now, pos, size, TimelineLayer.General, setting);
             }
-            foreach (var item in list)
+            foreach (TimelineItem item in list)
             {
                 item.Draw(now, pos, size, TimelineLayer.Status, setting);
             }
 
-            var status = TimelineManager.Instance?.GetStatus(endTime, out _);
+            List<StatusLineItem>? status = TimelineManager.Instance?.GetStatus(endTime, out _);
             if (status != null && setting.ShowStatusLine)
             {
-                foreach (var item in status)
+                foreach (StatusLineItem item in status)
                 {
                     item.Draw(now, pos, size, setting);
                 }
             }
 
-            foreach (var item in list)
+            foreach (TimelineItem item in list)
             {
                 item.Draw(now, pos, size, TimelineLayer.Icon, setting);
             }
@@ -129,7 +135,7 @@ internal static class TimelineWindow
         {
             uint lineColor = ImGui.ColorConvertFloat4ToU32(setting.GridStartLineColor);
 
-            var pt = pos + timeDirWhole - setting.TimeOffset * setting.TimeDirectionPerSecond;
+            Vector2 pt = pos + timeDirWhole - setting.TimeOffset * setting.TimeDirectionPerSecond;
 
             ImGui.GetWindowDrawList().AddLine(pt, pt + downDirWhole, lineColor, setting.GridStartLineWidth);
         }
@@ -143,19 +149,22 @@ internal static class TimelineWindow
 
     private static void DrawGrid(Vector2 pos, Vector2 timeDirWhole, Vector2 downDirWhole, DrawingSettings setting)
     {
-        if (!setting.ShowGrid) return;
+        if (!setting.ShowGrid)
+        {
+            return;
+        }
 
         ImDrawListPtr drawList = ImGui.GetWindowDrawList();
-        var timeLineLength = timeDirWhole.Length();
-        var downLineLength = downDirWhole.Length();
+        float timeLineLength = timeDirWhole.Length();
+        float downLineLength = downDirWhole.Length();
 
         uint lineColor = ImGui.ColorConvertFloat4ToU32(setting.GridLineColor);
         uint subdivisionLineColor = ImGui.ColorConvertFloat4ToU32(setting.GridSubdivisionLineColor);
 
         if (setting.GridDivideBySeconds)
         {
-            var step = setting.SizePerSecond;
-            var startPt = pos + timeDirWhole;
+            float step = setting.SizePerSecond;
+            Vector2 startPt = pos + timeDirWhole;
 
             for (int i = 0; i < timeLineLength / step; i++)
             {
@@ -164,11 +173,11 @@ internal static class TimelineWindow
                     float subStep = step * 1f / setting.GridSubdivisionCount;
                     for (int j = 1; j < setting.GridSubdivisionCount; j++)
                     {
-                        var pt = startPt + setting.RealDownDirection * subStep * j;
+                        Vector2 pt = startPt + setting.RealDownDirection * subStep * j;
                         drawList.AddLine(pt, pt + downDirWhole, subdivisionLineColor, setting.GridSubdivisionLineWidth);
                     }
                 }
-                var time = -i + setting.TimeOffset;
+                int time = -i + setting.TimeOffset;
 
                 if (time != 0 || setting.IsRotation)
                 {
@@ -187,7 +196,7 @@ internal static class TimelineWindow
         lineColor = ImGui.ColorConvertFloat4ToU32(setting.GridCenterLineColor);
         if (setting.ShowGridCenterLine)
         {
-            var pt = pos + downDirWhole / 2 + setting.RealDownDirection * setting.CenterOffset;
+            Vector2 pt = pos + downDirWhole / 2 + setting.RealDownDirection * setting.CenterOffset;
             drawList.AddLine(pt, pt + timeDirWhole, lineColor, setting.GridCenterLineWidth);
         }
     }

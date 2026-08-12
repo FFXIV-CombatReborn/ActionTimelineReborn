@@ -10,6 +10,6 @@ public enum TimelineItemType : byte
 public enum TimelineItemState : byte
 {
     Casting,
-    Canceled, 
+    Canceled,
     Finished,
 }
