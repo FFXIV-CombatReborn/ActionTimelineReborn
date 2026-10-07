@@ -1,16 +1,14 @@
 using ActionTimelineReborn.Configurations;
 using ActionTimelineReborn.Timeline;
 using ActionTimelineReborn.Windows;
-using Dalamud.Bindings.ImGui;
 using Dalamud.Game.ClientState.Conditions;
-using Dalamud.Interface;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
 using ECommons;
 using ECommons.Commands;
 using ECommons.DalamudServices;
 using ECommons.GameHelpers;
-using System.Diagnostics;
+using RebornMaterial;
 
 namespace ActionTimelineReborn;
 
@@ -87,35 +85,9 @@ public class Plugin : IDalamudPlugin
             Settings = new Settings();
         }
 
+        M3.Initialize(pluginInterface, Settings);
+
         CreateWindows();
-        _settingsWindow.TitleBarButtons.Add(new TitleBarButton()
-        {
-            Icon = FontAwesomeIcon.Heart,
-            ShowTooltip = () =>
-            {
-                ImGui.BeginTooltip();
-                ImGui.Text("Support the developer on Ko-fi");
-                ImGui.EndTooltip();
-            },
-            Priority = 2,
-            Click = _ =>
-            {
-                try
-                {
-                    Process.Start(new ProcessStartInfo()
-                    {
-                        FileName = "https://ko-fi.com/ltscombatreborn",
-                        UseShellExecute = true,
-                        Verb = string.Empty
-                    });
-                }
-                catch
-                {
-                    // ignored
-                }
-            },
-            AvailableClickthrough = true
-        });
     }
 
     public void Dispose()
@@ -170,6 +142,7 @@ public class Plugin : IDalamudPlugin
             return;
         }
 
+        M3.BeginFrame();
         _windowSystem?.Draw();
 
         if (!ShowTimeline())
@@ -184,7 +157,7 @@ public class Plugin : IDalamudPlugin
         }
     }
 
-    private bool ShowTimeline()
+    private static bool ShowTimeline()
     {
         if (Settings.ShowTimelineOnlyInCombat && !Svc.Condition[ConditionFlag.InCombat])
         {
@@ -215,7 +188,12 @@ public class Plugin : IDalamudPlugin
 
     public static void OpenConfigUi()
     {
-        _settingsWindow.IsOpen = true;
+        _settingsWindow.Open();
+    }
+
+    public static void OpenTimelineSettings(int index)
+    {
+        _settingsWindow.Open(index);
     }
 
     protected virtual void Dispose(bool disposing)
@@ -230,6 +208,8 @@ public class Plugin : IDalamudPlugin
         TimelineManager.Instance?.Dispose();
 
         _windowSystem.RemoveAllWindows();
+
+        M3.Dispose();
 
         ECommonsMain.Dispose();
 
