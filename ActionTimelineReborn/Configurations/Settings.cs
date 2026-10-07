@@ -1,10 +1,12 @@
 ﻿using Dalamud.Configuration;
 using ECommons.DalamudServices;
+using RebornMaterial;
+using System.Numerics;
 
 namespace ActionTimelineReborn.Configurations;
 
 [Serializable]
-public class Settings : IPluginConfiguration
+public class Settings : IPluginConfiguration, IM3Settings
 {
     public bool ShowTimelineOnlyInDuty = false;
     public bool ShowTimelineOnlyInCombat = false;
@@ -18,6 +20,11 @@ public class Settings : IPluginConfiguration
     public int PrintClippingMin = 150;
     public int PrintClippingMax = 2000;
     public int Version { get; set; } = 6;
+
+    public Vector4 UiAccentColor { get; set; } = M3.DefaultSeed;
+    public float UiTextScale { get; set; } = 1f;
+    public float UiElementScale { get; set; } = 1f;
+    public float UiPaddingScale { get; set; } = 1f;
 
     public void Save()
     {

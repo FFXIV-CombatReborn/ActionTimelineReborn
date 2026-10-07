@@ -16,9 +16,15 @@
       },
       "ECommons": {
         "type": "Direct",
-        "requested": "[3.2.1.17, )",
-        "resolved": "3.2.1.17",
-        "contentHash": "gIjvCFzqJApeyncqDegjvs2QFAVoXuwkrfFimhXWhu6x8zAloh8Wyu1Qu8BSym79HuTu4v5/U/HhNqkFy6uwoA=="
+        "requested": "[3.2.1.22, )",
+        "resolved": "3.2.1.22",
+        "contentHash": "dGjjULRQtFbTdau9Cu1VcIQTwsbdomRxugyLciWrawHQ7nfNm76H8oUwAZFztwKtt3moiMdevzRVGIBsrgHO3g=="
+      },
+      "RebornMaterial": {
+        "type": "Direct",
+        "requested": "[7.5.6, )",
+        "resolved": "7.5.6",
+        "contentHash": "28eO965rZY2W7GTmyKw55eSZ/McuM6dobmyfKL8r59dRUvyJLEvkyTOrwF/QgN9JI9f+Z38nHL2xFK0q7cGLvA=="
       }
     }
   }
