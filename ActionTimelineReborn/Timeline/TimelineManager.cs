@@ -1,13 +1,15 @@
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Hooking;
+using Dalamud.Plugin.Services;
 using Dalamud.Utility.Signatures;
 using ECommons.DalamudServices;
 using ECommons.GameHelpers;
 using ECommons.Hooks;
 using ECommons.Hooks.ActionEffectTypes;
 using FFXIVClientStructs.FFXIV.Client.Game;
-using Lumina.Excel;
 using Action = Lumina.Excel.Sheets.Action;
+using BattleChara = FFXIVClientStructs.FFXIV.Client.Game.Character.BattleChara;
+using GameStatus = FFXIVClientStructs.FFXIV.Client.Game.Status;
 using Status = Lumina.Excel.Sheets.Status;
 
 namespace ActionTimelineReborn.Timeline;
@@ -23,6 +25,8 @@ public class TimelineManager : IDisposable
 
     public TimelineManager()
     {
+        Svc.Framework.Update += UpdateStatuses;
+
         try
         {
             Svc.Hook.InitializeFromAttributes(this);
@@ -55,12 +59,14 @@ public class TimelineManager : IDisposable
         }
 
         _items.Clear();
-        _statusItems.Clear();
+        _statusChanges.Clear();
+        _trackedStatuses.Clear();
         _actionCache.Clear();
         _statusCache.Clear();
         _itemCache.Clear();
         ShowedStatusId.Clear();
 
+        Svc.Framework.Update -= UpdateStatuses;
         ActionEffect.ActionEffectEvent -= ActionFromSelf;
 
         _onActorControlHook?.Disable();
@@ -76,7 +82,9 @@ public class TimelineManager : IDisposable
     public void ClearAllData()
     {
         _items.Clear();
-        _statusItems.Clear();
+        _statusChanges.Clear();
+        _trackedStatuses.Clear();
+        _statusesTracked = false;
         _actionCache.Clear();
         _statusCache.Clear();
         _itemCache.Clear();
@@ -103,7 +111,7 @@ public class TimelineManager : IDisposable
 
     // Cache for action data to reduce Excel sheet lookups
     private static readonly Dictionary<uint, (string name, ushort icon, ActionCate category, byte cooldownGroup, byte additionalCooldownGroup)> _actionCache = [];
-    private static readonly Dictionary<uint, (string name, ushort icon, uint maxStacks)> _statusCache = [];
+    private static readonly Dictionary<ushort, (string name, uint icon, byte maxStacks)> _statusCache = [];
     private static readonly Dictionary<uint, (string name, ushort icon, float castTime)> _itemCache = [];
 
     public DateTime EndTime { get; private set; } = DateTime.Now;
@@ -158,25 +166,151 @@ public class TimelineManager : IDisposable
         return result;
     }
 
+    // A status timer jumping up by more than this means it was applied again.
+    private const float StatusRefreshThreshold = 1f;
+
+    private readonly record struct TrackedStatus(byte Stacks, float RemainingTime);
+
     private static readonly int kMaxStatusCount = 256;
-    private readonly Queue<StatusLineItem> _statusItems = new(kMaxStatusCount);
-    private void AddItem(StatusLineItem item)
+    private readonly Queue<StatusChangeItem> _statusChanges = new(kMaxStatusCount);
+    private Dictionary<ushort, TrackedStatus> _trackedStatuses = [];
+    private Dictionary<ushort, TrackedStatus> _scannedStatuses = [];
+    private bool _statusesTracked;
+
+    public List<StatusChangeItem> GetStatusChanges(DateTime time)
     {
-        if (item == null)
+        return GetItems(_statusChanges, time, out _);
+    }
+
+    // Compares the statuses you're the source of against the last frame, and records what changed.
+    private void UpdateStatuses(IFramework framework)
+    {
+        if (Plugin.Settings == null || !Plugin.Settings.Record || Player.Object is not { } player)
+        {
+            _trackedStatuses.Clear();
+            _statusesTracked = false;
+            return;
+        }
+
+        _scannedStatuses.Clear();
+        if (Plugin.Settings.RecordTargetStatus)
+        {
+            foreach (IGameObject obj in Svc.Objects)
+            {
+                if (obj is IBattleChara)
+                {
+                    ScanStatuses(obj.Address, player.EntityId, _scannedStatuses);
+                }
+            }
+        }
+        else
+        {
+            ScanStatuses(player.Address, player.EntityId, _scannedStatuses);
+        }
+
+        // The first scan is what you already had, not something that just changed.
+        if (_statusesTracked)
+        {
+            DateTime now = DateTime.Now;
+            foreach ((ushort id, TrackedStatus status) in _scannedStatuses)
+            {
+                if (!_trackedStatuses.TryGetValue(id, out TrackedStatus before))
+                {
+                    AddStatusChange(id, status.Stacks, StatusChangeType.Gained, now);
+                }
+                else if (status.Stacks != before.Stacks)
+                {
+                    AddStatusChange(id, status.Stacks, status.Stacks > before.Stacks ? StatusChangeType.StacksUp : StatusChangeType.StacksDown, now);
+                }
+                else if (status.RemainingTime > before.RemainingTime + StatusRefreshThreshold)
+                {
+                    AddStatusChange(id, status.Stacks, StatusChangeType.Gained, now);
+                }
+            }
+
+            foreach ((ushort id, TrackedStatus status) in _trackedStatuses)
+            {
+                if (!_scannedStatuses.ContainsKey(id))
+                {
+                    AddStatusChange(id, status.Stacks, StatusChangeType.Lost, now);
+                }
+            }
+        }
+
+        (_trackedStatuses, _scannedStatuses) = (_scannedStatuses, _trackedStatuses);
+        _statusesTracked = true;
+    }
+
+    // The same status on several targets counts once, so it's only lost when it's gone from all of them.
+    private static unsafe void ScanStatuses(nint address, uint sourceId, Dictionary<ushort, TrackedStatus> found)
+    {
+        BattleChara* chara = (BattleChara*)address;
+        if (chara == null)
         {
             return;
         }
 
-        if (_statusItems.Count >= kMaxStatusCount)
+        foreach (GameStatus status in chara->StatusManager.Status)
         {
-            _statusItems.Dequeue();
+            if (status.StatusId == 0 || status.SourceObject.ObjectId != sourceId)
+            {
+                continue;
+            }
+
+            (_, uint icon, byte maxStacks) = GetStatusData(status.StatusId);
+            if (icon == 0)
+            {
+                continue;
+            }
+
+            byte stacks = maxStacks > 1 ? (byte)Math.Min(status.Param, maxStacks) : (byte)0;
+            float remaining = status.RemainingTime;
+            if (found.TryGetValue(status.StatusId, out TrackedStatus other))
+            {
+                stacks = Math.Max(stacks, other.Stacks);
+                remaining = MathF.Max(remaining, other.RemainingTime);
+            }
+
+            found[status.StatusId] = new TrackedStatus(stacks, remaining);
         }
-        _statusItems.Enqueue(item);
     }
 
-    public List<StatusLineItem> GetStatus(DateTime time, out DateTime lastEndTime)
+    private void AddStatusChange(ushort id, byte stacks, StatusChangeType type, DateTime time)
     {
-        return GetItems(_statusItems, time, out lastEndTime);
+        if (Plugin.Settings.HideStatusIds.Contains(id))
+        {
+            return;
+        }
+
+        ShowedStatusId.Add(id);
+        (string name, uint icon, _) = GetStatusData(id);
+
+        if (_statusChanges.Count >= kMaxStatusCount)
+        {
+            _statusChanges.Dequeue();
+        }
+        _statusChanges.Enqueue(new StatusChangeItem()
+        {
+            // Stacking statuses have an icon for each stack count, one after another.
+            Icon = stacks > 1 ? icon + stacks - 1u : icon,
+            Name = name,
+            Stacks = stacks,
+            Type = type,
+            StartTime = time,
+        });
+    }
+
+    private static (string name, uint icon, byte maxStacks) GetStatusData(ushort id)
+    {
+        if (!_statusCache.TryGetValue(id, out (string name, uint icon, byte maxStacks) data))
+        {
+            data = Svc.Data.GetExcelSheet<Status>()?.GetRowOrDefault(id) is Status status
+                ? (status.Name.ToString(), status.Icon, status.MaxStacks)
+                : (string.Empty, 0u, (byte)0);
+            _statusCache[id] = data;
+        }
+
+        return data;
     }
 
     private static List<T> GetItems<T>(IEnumerable<T> items, DateTime time, out DateTime lastEndTime) where T : ITimelineItem
@@ -243,50 +377,6 @@ public class TimelineManager : IDisposable
         _lastItem.CastingTime = MathF.Min(maxTime, _lastItem.CastingTime);
     }
 
-    private static uint GetStatusIcon(ushort id, bool isGain, out string? name, byte stack = byte.MaxValue)
-    {
-        name = null;
-        if (Plugin.Settings.HideStatusIds.Contains(id))
-        {
-            return 0;
-        }
-
-        Status? status = Svc.Data.GetExcelSheet<Status>()?.GetRow(id);
-        if (status == null)
-        {
-            return 0;
-        }
-
-        name = status.Value.Name.ToString();
-
-        ShowedStatusId.Add(id);
-        uint icon = status.Value.Icon;
-
-        if (isGain)
-        {
-            return icon + (uint)Math.Max(0, status.Value.MaxStacks - 1);
-        }
-        else
-        {
-            if (stack == byte.MaxValue && Player.Object != null)
-            {
-                // Replace LINQ with manual loop for better performance
-                stack = 0;
-                Dalamud.Game.ClientState.Statuses.StatusList statusList = Player.Object.StatusList;
-                for (int i = 0; i < statusList.Length; i++)
-                {
-                    if (statusList[i] != null && statusList[i]!.StatusId == id)
-                    {
-                        stack = (byte)statusList[i]!.Param;
-                        break;
-                    }
-                }
-                stack++;
-            }
-            return icon + (uint)Math.Max(0, stack - 1);
-        }
-    }
-
     private void ActionFromSelf(ActionEffectSet set)
     {
         if (!Player.Available)
@@ -302,14 +392,10 @@ public class TimelineManager : IDisposable
         }
 
         DamageType damage = DamageType.None;
-        SortedSet<(uint, string?)> statusGain = [], statusLose = [];
 
         for (int i = 0; i < set.Header.TargetCount; i++)
         {
             TargetEffect effect = set.TargetEffects[i];
-            bool recordTarget = Plugin.Settings.RecordTargetStatus
-                || effect.TargetID == Player.Object?.GameObjectId;
-
             if (effect[0].type is ActionEffectType.Damage or ActionEffectType.Heal)
             {
                 byte flag = effect[0].param0;
@@ -318,32 +404,6 @@ public class TimelineManager : IDisposable
                 damage |= hasCritical ? (hasDirect ? DamageType.CriticalDirect : DamageType.Critical)
                     : hasDirect ? DamageType.Direct : DamageType.None;
             }
-
-            effect.ForEach(x =>
-            {
-                switch (x.type)
-                {
-                    case ActionEffectType.ApplyStatusEffectTarget when recordTarget:
-                    case ActionEffectType.ApplyStatusEffectSource:
-                        uint icon = GetStatusIcon(x.value, true, out string? name);
-                        if (icon != 0)
-                        {
-                            statusGain.Add((icon, name));
-                        }
-
-                        break;
-
-                    case ActionEffectType.LoseStatusEffectTarget when recordTarget:
-                    case ActionEffectType.LoseStatusEffectSource:
-                        icon = GetStatusIcon(x.value, false, out name);
-                        if (icon != 0)
-                        {
-                            statusLose.Add((icon, name));
-                        }
-
-                        break;
-                }
-            });
         }
 
         DateTime now = DateTime.Now;
@@ -403,119 +463,12 @@ public class TimelineManager : IDisposable
 
         effectItem.IsHq = set.Header.ActionType != ActionType.Item || set.Header.ActionID > 1000000;
 
-        foreach ((uint, string?) i in statusGain)
-        {
-            effectItem.StatusGainIcon.Add(i);
-        }
-        foreach ((uint, string?) i in statusLose)
-        {
-            effectItem.StatusLoseIcon.Add(i);
-        }
-
         if (effectItem.Type is TimelineItemType.AutoAttack)
         {
             return;
         }
 
         UpdateEndTime(effectItem.EndTime);
-
-        if (set.Header.TargetCount > 0)
-        {
-            AddStatusLine(effectItem, set.TargetEffects[0].TargetID);
-        }
-    }
-
-    private void AddStatusLine(TimelineItem? effectItem, ulong targetId)
-    {
-        if (effectItem == null)
-        {
-            return;
-        }
-
-        if (effectItem.StatusGainIcon.Count == 0)
-        {
-            return;
-        }
-
-        Svc.Framework.RunOnTick(() =>
-        {
-            List<StatusLineItem> list = new(4);
-            foreach ((uint icon, string? name) icon in effectItem.StatusGainIcon)
-            {
-                if (Plugin.IconStack.TryGetValue(icon.icon, out byte stack))
-                {
-                    StatusLineItem item = new StatusLineItem()
-                    {
-                        Icon = icon.icon,
-                        Name = icon.name,
-                        TimeDuration = 6,
-                        Stack = stack,
-                        StartTime = effectItem.StartTime,
-                    };
-                    list.Add(item);
-                    AddItem(item);
-                }
-            }
-
-            // Replace LINQ with manual loops for better performance
-            if (Player.Object == null)
-            {
-                return;
-            }
-
-            ulong playerGameObjectId = Player.Object.GameObjectId;
-
-            // Process player status list
-            Dalamud.Game.ClientState.Statuses.StatusList playerStatusList = Player.Object.StatusList;
-            for (int i = 0; i < playerStatusList.Length; i++)
-            {
-                Dalamud.Game.ClientState.Statuses.IStatus? status = playerStatusList[i];
-                if (status != null && status.SourceId == playerGameObjectId)
-                {
-                    ExcelSheet<Status> statusSheet = Svc.Data.GetExcelSheet<Status>();
-                    Status? statusRow = statusSheet?.GetRow(status.StatusId);
-                    if (statusRow != null)
-                    {
-                        uint icon = statusRow.Value.Icon;
-                        foreach (StatusLineItem item in list)
-                        {
-                            if (item.Icon == icon)
-                            {
-                                item.TimeDuration = (float)(DateTime.Now - effectItem.StartTime).TotalSeconds + status.RemainingTime;
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Process target status list if available
-            if (Svc.Objects.SearchById(targetId) is IBattleChara battleChar)
-            {
-                Dalamud.Game.ClientState.Statuses.StatusList targetStatusList = battleChar.StatusList;
-                for (int i = 0; i < targetStatusList.Length; i++)
-                {
-                    Dalamud.Game.ClientState.Statuses.IStatus? status = targetStatusList[i];
-                    if (status != null && status.SourceId == playerGameObjectId)
-                    {
-                        ExcelSheet<Status> statusSheet = Svc.Data.GetExcelSheet<Status>();
-                        Status? statusRow = statusSheet?.GetRow(status.StatusId);
-                        if (statusRow != null)
-                        {
-                            uint icon = statusRow.Value.Icon;
-                            foreach (StatusLineItem item in list)
-                            {
-                                if (item.Icon == icon)
-                                {
-                                    item.TimeDuration = (float)(DateTime.Now - effectItem.StartTime).TotalSeconds + status.RemainingTime;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        });
     }
 
     private void OnActorControl(uint entityId, uint type, uint buffID, uint direct, uint actionId, uint sourceId, uint arg7, uint arg8, uint arg9, uint arg10, ulong targetId, byte arg12)

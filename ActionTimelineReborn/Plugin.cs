@@ -14,50 +14,6 @@ namespace ActionTimelineReborn;
 
 public class Plugin : IDalamudPlugin
 {
-    public static readonly SortedList<uint, byte> IconStack = new()
-    {
-        { 16203, 0 }, // Medicine.
-
-        { 10155, 1 }, //PLD Fight or Flight.
-
-        { 12556, 1 }, //WAR Inner Strength.
-
-        { 17926, 1 }, //DRK Blood Weapon.
-
-        { 13601, 1 }, //GNB No mercy.
-
-        { 12627, 1 }, //WHM Presence of Mind.
-
-        { 12809, 1 }, //SCH Chain Stratagem.
-
-        { 13245, 1 }, //AST Divination.
-        { 13259, 2 }, //AST Harmony of Spirit.
-
-        { 12532, 1 }, //MNK Brotherhood.
-        { 12528, 2 }, //MNK Brotherhood.
-
-        { 12578, 1 }, //DRG Battle Litany.
-        { 12581, 2 }, //DRG Right Eye.
-        { 10304, 3 }, //DRG Lance Charge.
-
-        { 12918, 1 }, //NIN Trick Attack.
-        { 15020, 2 }, //NIN Vulnerability Up.
-
-        { 12601, 1 }, //BRD Battle Voice.
-        { 12622, 2 }, //BRD Radiant Finale.
-        { 10354, 3 }, //BRD Radiant Finale.
-
-        { 13011, 1 }, //MCH Wildfire.
-
-        { 13714, 1 }, //DNC Devilment.
-        { 13709, 2 }, //DNC Technical Finish.
-
-        { 12653, 1 }, //BLM Ley Lines.
-
-        { 13409, 1 }, //RDM Embolden.
-
-        { 12699, 1 }, //SMN 2703.
-    };
     public static string Name => "ActionTimelineReborn";
 
     public static string Version { get; private set; } = "";

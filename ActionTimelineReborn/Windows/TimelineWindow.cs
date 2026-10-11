@@ -23,12 +23,10 @@ internal static class TimelineWindow
                                         | ImGuiWindowFlags.NoFocusOnAppearing;
 
     private const float SecondWidth = 80f;
-    private const float MarkerHeight = 16f;
-    private const float MarkerGap = 2f;
+    private const float StatusIconHeight = 26f;
+    private const float MarkerUnderline = 3f;
     private const float GcdLaneHeight = 48f;
     private const float OgcdLaneHeight = 36f;
-    private const float StatusRowHeight = 9f;
-    private const float StatusRowGap = 2f;
     private const float LaneGap = 6f;
     private const float IconInset = 3f;
     private const float LockLineHeight = 2f;
@@ -38,6 +36,9 @@ internal static class TimelineWindow
 
     private const float FutureSeconds = 2f;
 
+    // Status changes are moments rather than spans, so look back far enough to keep the ones still poking in from the left.
+    private const float StatusLookbackSeconds = 2f;
+
     private const float StatusIconAspect = 0.75f;
 
     private const string EmptyText = "Actions show up here as you use them.";
@@ -45,8 +46,6 @@ internal static class TimelineWindow
     private static readonly int[] AxisSteps = [1, 2, 5, 10, 15, 30, 60];
 
     private static readonly string[] _axisLabels = new string[256];
-
-    private static readonly int StatusRows = Plugin.IconStack.Values.Max() + 1;
 
     private static readonly M3WindowAction[] Actions =
     [
@@ -157,16 +156,14 @@ internal static class TimelineWindow
             labelWidth = ImGui.CalcTextSize("-00s").X;
         }
 
-        float markerTop = origin.Y;
-        float gcdTop = setting.ShowStatus ? markerTop + ((MarkerHeight + MarkerGap) * scale) : markerTop;
+        float gcdTop = origin.Y;
         float gcdBottom = gcdTop + (GcdLaneHeight * scale);
         float ogcdTop = gcdBottom + laneGap;
         float ogcdBottom = ogcdTop + (OgcdLaneHeight * scale);
         float actionsBottom = setting.ShowOGCD ? ogcdBottom : gcdBottom;
         float statusTop = actionsBottom + laneGap;
-        float lanesBottom = setting.ShowStatusLine
-            ? statusTop + (StatusRows * StatusRowHeight * scale) + ((StatusRows - 1) * StatusRowGap * scale)
-            : actionsBottom;
+        float statusHeight = ((StatusIconHeight * setting.StatusIconScale) + MarkerUnderline + (IconInset * 2f)) * scale;
+        float lanesBottom = setting.ShowStatus ? statusTop + statusHeight : actionsBottom;
         float axisTop = lanesBottom + laneGap;
         float height = axisTop + labelHeight - origin.Y;
 
@@ -185,7 +182,9 @@ internal static class TimelineWindow
         DateTime since = axis.Now.AddSeconds(-(axis.NowX - axis.Left) / secondWidth);
         DateTime lastGcdEnd = DateTime.MinValue;
         List<TimelineItem>? items = TimelineManager.Instance?.GetItems(since, out lastGcdEnd);
-        List<StatusLineItem>? statuses = setting.ShowStatusLine ? TimelineManager.Instance?.GetStatus(since, out _) : null;
+        List<StatusChangeItem>? statuses = setting.ShowStatus
+            ? TimelineManager.Instance?.GetStatusChanges(since.AddSeconds(-StatusLookbackSeconds))
+            : null;
 
         Vector2 windowPos = ImGui.GetWindowPos();
         Vector2 windowSize = ImGui.GetWindowSize();
@@ -207,7 +206,7 @@ internal static class TimelineWindow
             DrawLaneTrack(drawList, axis, ogcdTop, ogcdBottom);
         }
 
-        if (setting.ShowStatusLine)
+        if (setting.ShowStatus)
         {
             DrawLaneTrack(drawList, axis, statusTop, lanesBottom);
         }
@@ -221,10 +220,7 @@ internal static class TimelineWindow
 
         if (statuses != null)
         {
-            foreach (StatusLineItem status in statuses)
-            {
-                DrawStatusLine(drawList, status, axis, statusTop, ref hover);
-            }
+            DrawStatusChanges(drawList, statuses, setting, axis, statusTop + (IconInset * scale), ref hover);
         }
 
         if (items != null)
@@ -247,11 +243,6 @@ internal static class TimelineWindow
 
                 drawn++;
                 hover.Check(min, max, item);
-
-                if (setting.ShowStatus)
-                {
-                    DrawStatusMarkers(drawList, item, axis, markerTop, ref hover);
-                }
             }
         }
 
@@ -263,7 +254,7 @@ internal static class TimelineWindow
                 DrawFuture(drawList, axis, ogcdTop, ogcdBottom);
             }
 
-            if (setting.ShowStatusLine)
+            if (setting.ShowStatus)
             {
                 DrawFuture(drawList, axis, statusTop, lanesBottom);
             }
@@ -517,40 +508,37 @@ internal static class TimelineWindow
     #endregion
 
     #region Statuses
-    // The statuses an action gave or removed, in a strip above the GCD lane, underlined to say which.
-    private static void DrawStatusMarkers(ImDrawListPtr drawList, TimelineItem item, in Axis axis, float top, ref Hover hover)
+    // Each change to a status you applied, at the moment it happened. Changes that land together sit side by side.
+    private static void DrawStatusChanges(ImDrawListPtr drawList, List<StatusChangeItem> changes, DrawingSettings setting, in Axis axis, float top, ref Hover hover)
     {
-        if (item.StatusGainIcon.Count == 0 && item.StatusLoseIcon.Count == 0)
-        {
-            return;
-        }
-
         float scale = M3.Scale;
-        float iconHeight = (MarkerHeight - 3f) * scale;
+        float iconHeight = StatusIconHeight * setting.StatusIconScale * scale;
         Vector2 size = new(iconHeight * StatusIconAspect, iconHeight);
-        float step = size.X + (1f * scale);
-        float x = axis.X(item.StartTime);
+        float gap = 1f * scale;
+        float next = float.MinValue;
 
-        foreach ((uint icon, string? name) in item.StatusGainIcon)
+        foreach (StatusChangeItem change in changes)
         {
-            DrawStatusMarker(drawList, icon, name, true, new Vector2(x, top), size, ref hover);
-            x += step;
-        }
+            float x = MathF.Max(axis.X(change.StartTime), next);
+            next = x + size.X + gap;
+            if (next < axis.Left || x > axis.Right)
+            {
+                continue;
+            }
 
-        foreach ((uint icon, string? name) in item.StatusLoseIcon)
-        {
-            DrawStatusMarker(drawList, icon, name, false, new Vector2(x, top), size, ref hover);
-            x += step;
+            DrawStatusChange(drawList, change, new Vector2(x, top), size, ref hover);
         }
     }
 
-    private static void DrawStatusMarker(ImDrawListPtr drawList, uint icon, string? name, bool gained, Vector2 min, Vector2 size, ref Hover hover)
+    // Underlined to say whether the status was gained or lost.
+    private static void DrawStatusChange(ImDrawListPtr drawList, StatusChangeItem change, Vector2 min, Vector2 size, ref Hover hover)
     {
         M3Scheme s = M3.Scheme;
         float scale = M3.Scale;
         Vector2 max = min + size;
+        bool gained = change.Type is StatusChangeType.Gained or StatusChangeType.StacksUp;
 
-        IDalamudTextureWrap? texture = DrawHelper.GetTextureFromIconId(icon);
+        IDalamudTextureWrap? texture = DrawHelper.GetTextureFromIconId(change.Icon);
         if (texture != null)
         {
             drawList.AddImage(texture.Handle, min, max, Vector2.Zero, Vector2.One, M3.U32(Vector4.One, gained ? 1f : 0.6f));
@@ -562,41 +550,21 @@ internal static class TimelineWindow
 
         if (hover.Check(min, new Vector2(max.X, lineY + (thickness * 0.5f))))
         {
-            hover.Text = $"{(gained ? "Gained" : "Lost")} {(string.IsNullOrEmpty(name) ? "an unknown status" : name)}";
+            hover.Text = Describe(change);
         }
     }
 
-    private static void DrawStatusLine(ImDrawListPtr drawList, StatusLineItem status, in Axis axis, float top, ref Hover hover)
+    private static string Describe(StatusChangeItem change)
     {
-        float scale = M3.Scale;
-        float rowHeight = StatusRowHeight * scale;
-        int row = Math.Clamp((int)status.Stack, 0, StatusRows - 1);
-        float rowTop = top + (row * (rowHeight + (StatusRowGap * scale)));
-
-        float x0 = axis.X(status.StartTime);
-        float x1 = axis.X(status.EndTime);
-        if (x1 < axis.Left || x0 > axis.Right)
+        string name = string.IsNullOrEmpty(change.Name) ? "an unknown status" : change.Name;
+        string stacks = change.Stacks == 1 ? "1 stack" : $"{change.Stacks} stacks";
+        return change.Type switch
         {
-            return;
-        }
-
-        Vector2 min = new(x0, rowTop);
-        Vector2 max = new(x1, rowTop + rowHeight);
-        Vector4 color = ImGui.ColorConvertU32ToFloat4(DrawHelper.GetTextureAverageColor(status.Icon));
-        drawList.AddRectFilled(min, max, M3.U32(color, 0.55f), rowHeight * 0.5f);
-
-        IDalamudTextureWrap? texture = DrawHelper.GetTextureFromIconId(status.Icon);
-        if (texture != null)
-        {
-            float iconWidth = rowHeight * StatusIconAspect;
-            float iconX = MathF.Max(x0, MathF.Min(axis.Left, x1 - iconWidth));
-            drawList.AddImage(texture.Handle, new Vector2(iconX, rowTop), new Vector2(iconX + iconWidth, rowTop + rowHeight));
-        }
-
-        if (hover.Check(min, max))
-        {
-            hover.Text = string.IsNullOrEmpty(status.Name) ? "Unknown status" : status.Name;
-        }
+            StatusChangeType.Gained => $"Gained {name}",
+            StatusChangeType.Lost => $"Lost {name}",
+            StatusChangeType.StacksUp => $"{name} up to {stacks}",
+            _ => $"{name} down to {stacks}",
+        };
     }
     #endregion
 
@@ -743,16 +711,6 @@ internal static class TimelineWindow
             });
         }
 
-        if (setting.ShowStatus && item.StatusGainIcon.Count > 0)
-        {
-            ImGui.TextUnformatted($"Gained {StatusNames(item.StatusGainIcon)}");
-        }
-
-        if (setting.ShowStatus && item.StatusLoseIcon.Count > 0)
-        {
-            ImGui.TextUnformatted($"Lost {StatusNames(item.StatusLoseIcon)}");
-        }
-
         if (item.State == TimelineItemState.Casting)
         {
             ImGui.TextUnformatted("Casting now");
@@ -761,11 +719,6 @@ internal static class TimelineWindow
         {
             ImGui.TextUnformatted($"{(now - item.StartTime).TotalSeconds:F1}s ago");
         }
-    }
-
-    private static string StatusNames(HashSet<(uint icon, string? name)> statuses)
-    {
-        return string.Join(", ", statuses.Select(status => string.IsNullOrEmpty(status.name) ? "an unknown status" : status.name));
     }
 
     private static string Describe(TimelineItem item)
