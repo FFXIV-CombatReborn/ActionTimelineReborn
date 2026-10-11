@@ -22,7 +22,4 @@ public class TimelineItem : ITimelineItem
     public float TimeDuration => MathF.Max(GCDTime, CastingTime + AnimationLockTime);
 
     public DateTime EndTime => StartTime + TimeSpan.FromSeconds(TimeDuration);
-
-    public HashSet<(uint icon, string? name)> StatusGainIcon { get; } = new(4);
-    public HashSet<(uint icon, string? name)> StatusLoseIcon { get; } = new(4);
 }

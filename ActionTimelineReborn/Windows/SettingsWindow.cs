@@ -533,7 +533,7 @@ namespace ActionTimelineReborn.Windows
             {
                 M3Widgets.RowSwitch("Record actions", ref Settings.Record, "Turn off to stop adding new actions to the timelines.");
                 M3Widgets.RowSwitch("Record target statuses", ref Settings.RecordTargetStatus,
-                    "Also show statuses your actions apply to other targets, not only to you.");
+                    "Also show statuses you put on others, like damage over time, not only the ones on you.");
 
                 M3RowInfo row = M3SettingRow.Begin("Clear timeline data", "Removes everything recorded so far and frees the memory it used.",
                     new Vector2(M3Widgets.ButtonWidth(FontAwesomeIcon.TrashAlt, "Clear"), M3Widgets.ButtonHeight));
@@ -763,7 +763,7 @@ namespace ActionTimelineReborn.Windows
             {
                 M3Text.Draw("Unlock a timeline to move or resize it, then lock it again so clicks pass through to the game.", wrap: true);
                 M3Text.Draw("Hover an unlocked timeline for buttons to lock it, open its settings or hide it. Right-clicking it opens its settings too.", wrap: true);
-                M3Text.Draw("Hover an action on a timeline to see its cast, recast, lock, damage and statuses.", wrap: true);
+                M3Text.Draw("Hover an action on a timeline to see its cast, recast, lock and damage, or a status to see what changed.", wrap: true);
             }
 
             using (M3Card.Begin("help_links", "Links", FontAwesomeIcon.Link))
@@ -814,9 +814,14 @@ namespace ActionTimelineReborn.Windows
                 M3Widgets.RowSwitch("Off-GCD actions", ref settings.ShowOGCD, "Adds a lane for off-GCD actions under the GCDs.");
                 M3Widgets.RowSwitch("Auto attacks", ref settings.ShowAutoAttack, "Marks each auto attack with a dot under the actions.");
                 M3Widgets.RowSwitch("Animation lock", ref settings.ShowAnimationLock, "Underlines each action for as long as it locks you out of others.");
-                M3Widgets.RowSwitch("Status changes", ref settings.ShowStatus, "Shows the statuses each action gives or removes, above the GCDs.");
                 M3Widgets.RowSwitch("Damage type", ref settings.ShowDamageType, "Rings the icons of direct and critical hits.");
-                M3Widgets.RowSwitch("Status line", ref settings.ShowStatusLine, "Adds a lane showing how long your main buffs and potions last.");
+                M3Widgets.RowSwitch("Status line", ref settings.ShowStatus,
+                    "Adds a lane under the actions marking each time a status you applied is gained, lost or changes stacks.");
+                using (M3SubGroup.Begin())
+                {
+                    M3Widgets.RowDragFloat("Status icon size", ref settings.StatusIconScale, 0.5f, 1.5f, "%.2fx",
+                        "Sizes the status icons, on top of the timeline's scale.", enabled: settings.ShowStatus);
+                }
             }
 
             using (M3Card.Begin($"{key}_clipping", "GCD clipping", FontAwesomeIcon.Cut, subtitle: "Highlights the gap when a GCD starts late."))

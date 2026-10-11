@@ -13,3 +13,11 @@ public enum TimelineItemState : byte
     Canceled,
     Finished,
 }
+
+public enum StatusChangeType : byte
+{
+    Gained,
+    Lost,
+    StacksUp,
+    StacksDown,
+}

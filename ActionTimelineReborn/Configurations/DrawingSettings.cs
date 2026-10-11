@@ -19,7 +19,7 @@ public class DrawingSettings
     public bool ShowAnimationLock = true;
     public bool ShowStatus = true;
     public bool ShowDamageType = true;
-    public bool ShowStatusLine = true;
+    public float StatusIconScale = 1f;
 
     public bool ShowGCDClippingSetting = true;
     public bool ShowGCDClipping => !IsRotation && ShowGCDClippingSetting;
