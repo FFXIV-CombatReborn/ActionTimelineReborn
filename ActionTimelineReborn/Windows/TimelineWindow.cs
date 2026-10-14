@@ -33,6 +33,7 @@ internal static class TimelineWindow
     private const float DamageRingWidth = 2f;
     private const float AutoAttackRadius = 2.5f;
     private const float NowCapRadius = 3.5f;
+    private const float ClipLabelPadding = 3f;
 
     private const float FutureSeconds = 2f;
 
@@ -59,7 +60,8 @@ internal static class TimelineWindow
         public float MinimumWidth;
     }
 
-    private static readonly ConditionalWeakTable<DrawingSettings, Layout> _layouts = new();
+    private static readonly ConditionalWeakTable<DrawingSettings, Layout> _layouts = [];
+    private static readonly Dictionary<TimelineItem, float> _gcdEnds = [];
 
     private readonly record struct Axis(DateTime Now, float NowX, float SecondWidth, float Left, float Right)
     {
@@ -213,6 +215,7 @@ internal static class TimelineWindow
 
         DrawAxis(drawList, axis, gcdTop, lanesBottom, axisTop, labelWidth);
 
+        _gcdEnds.Clear();
         if (setting.ShowGCDClipping && items != null)
         {
             DrawClipping(drawList, setting, items, lastGcdEnd, axis, gcdTop, gcdBottom, ref hover);
@@ -352,7 +355,13 @@ internal static class TimelineWindow
         float inset = IconInset * M3.Scale;
 
         float x0 = axis.X(item.StartTime);
-        float x1 = MathF.Max(axis.X(item.EndTime), x0 + laneHeight);
+        float x1 = axis.X(item.EndTime);
+        if (_gcdEnds.TryGetValue(item, out float end))
+        {
+            x1 = MathF.Min(x1, end);
+        }
+
+        x1 = MathF.Max(x1, x0 + laneHeight);
         min = new Vector2(x0, top);
         max = new Vector2(x1, bottom);
         if (x1 < axis.Left || x0 > axis.Right)
@@ -572,9 +581,13 @@ internal static class TimelineWindow
     private static void DrawClipping(ImDrawListPtr drawList, DrawingSettings setting, List<TimelineItem> items, DateTime last, in Axis axis, float top, float bottom, ref Hover hover)
     {
         M3Scheme s = M3.Scheme;
-        TimeSpan threshold = TimeSpan.FromSeconds(setting.GCDClippingThreshold);
+        TimeSpan threshold = TimeSpan.FromSeconds(MathF.Max(setting.GCDClippingThreshold, 0.001f));
         TimeSpan longest = TimeSpan.FromSeconds(setting.GCDClippingMaxTime);
+        float laneHeight = bottom - top;
+        float padding = ClipLabelPadding * M3.Scale;
+        TimelineItem? previous = null;
 
+        using ImRaii.FontDisposable font = ImRaii.PushFont(M3.LabelSmall);
         foreach (TimelineItem item in items)
         {
             if (item.Type != TimelineItemType.GCD)
@@ -585,20 +598,34 @@ internal static class TimelineWindow
             TimeSpan span = item.StartTime - last;
             if (last != DateTime.MinValue && span >= threshold && span < longest)
             {
+                int milliseconds = (int)span.TotalMilliseconds;
+                string label = $"{milliseconds}ms";
+                Vector2 labelSize = ImGui.CalcTextSize(label);
+                float labelRoom = labelSize.X + (padding * 2f);
+
                 Vector2 min = new(axis.X(last), top);
                 Vector2 max = new(axis.X(item.StartTime), bottom);
+
+                // Too short for its label, so take the room from the end of the GCD before it, short of that GCD's icon.
+                float start = max.X - labelRoom;
+                float floor = previous == null ? float.MinValue : axis.X(previous.StartTime) + laneHeight;
+                bool fits = start >= MathF.Min(min.X, floor);
+                float edge = MathF.Max(start, floor);
+                if (edge < min.X)
+                {
+                    min.X = edge;
+                    if (previous != null)
+                    {
+                        _gcdEnds[previous] = edge;
+                    }
+                }
+
                 drawList.AddRectFilled(min, max, M3.U32(s.Error, 0.18f), M3.ShapeSmall);
 
-                int milliseconds = (int)span.TotalMilliseconds;
-                using (ImRaii.PushFont(M3.LabelSmall))
+                if (fits)
                 {
-                    string label = $"{milliseconds}ms";
-                    Vector2 labelSize = ImGui.CalcTextSize(label);
-                    if (labelSize.X + (4f * M3.Scale) <= max.X - min.X)
-                    {
-                        drawList.AddText(new Vector2((min.X + max.X - labelSize.X) * 0.5f, (min.Y + max.Y - labelSize.Y) * 0.5f),
-                            M3.U32(s.Error), label);
-                    }
+                    drawList.AddText(new Vector2((min.X + max.X - labelSize.X) * 0.5f, (min.Y + max.Y - labelSize.Y) * 0.5f),
+                        M3.U32(s.Error), label);
                 }
 
                 if (hover.Check(min, max))
@@ -608,6 +635,7 @@ internal static class TimelineWindow
             }
 
             last = item.EndTime;
+            previous = item;
         }
     }
     #endregion
