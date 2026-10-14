@@ -424,7 +424,7 @@ public class TimelineManager : IDisposable
             if (lastGcd != null)
             {
                 int time = (int)(now - lastGcd.EndTime).TotalMilliseconds;
-                if (time >= Plugin.Settings.PrintClippingMin && time <= Plugin.Settings.PrintClippingMax)
+                if (time >= Math.Max(Plugin.Settings.PrintClippingMin, 1) && time <= Plugin.Settings.PrintClippingMax)
                 {
                     Svc.Chat.Print($"Clipping: {time}ms ({lastGcd.Name} - {set.Name})");
                 }

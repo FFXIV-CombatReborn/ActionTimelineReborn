@@ -553,7 +553,7 @@ namespace ActionTimelineReborn.Windows
 
                 using (M3SubGroup.Begin())
                 {
-                    M3Widgets.RowNumber("Shortest delay", ref Settings.PrintClippingMin, step: 10, min: 0, max: Settings.PrintClippingMax,
+                    M3Widgets.RowNumber("Shortest delay", ref Settings.PrintClippingMin, step: 10, min: 1, max: Settings.PrintClippingMax,
                         unit: "ms", supporting: "Shorter delays aren't printed.", enabled: Settings.PrintClipping);
                     M3Widgets.RowNumber("Longest delay", ref Settings.PrintClippingMax, step: 10, min: Settings.PrintClippingMin, max: 60000,
                         unit: "ms", supporting: "Longer delays aren't printed.", enabled: Settings.PrintClipping);
@@ -838,7 +838,7 @@ namespace ActionTimelineReborn.Windows
                     bool enabled = settings.ShowGCDClipping;
 
                     int threshold = (int)(settings.GCDClippingThreshold * 1000f);
-                    if (M3Widgets.RowDragInt("Threshold (ms)", ref threshold, 0, 1000,
+                    if (M3Widgets.RowDragInt("Threshold (ms)", ref threshold, 1, 1000,
                         "Shorter gaps are ignored, to filter out latency. Try a few values to find what suits your connection.", enabled: enabled))
                     {
                         settings.GCDClippingThreshold = threshold / 1000f;
