@@ -58,6 +58,7 @@ namespace ActionTimelineReborn.Windows
         private M3Style.Scope _theme;
         private string _page = GeneralPage;
         private int _newStatusId;
+        private bool _colorsExpanded;
 
         private static M3WindowBrand Brand => new(GetLogo(), "ATR", FontAwesomeIcon.Stream);
 
@@ -805,8 +806,6 @@ namespace ActionTimelineReborn.Windows
             {
                 M3Widgets.RowSwitch("Locked", ref settings.Locked, "Stops the window from moving or resizing, and lets clicks pass through it.");
                 M3Widgets.RowDragFloat("Scale", ref settings.Scale, 0.5f, 2f, "%.2fx", "Sizes everything on this timeline. Drag its edges to show more or less time.");
-                M3Widgets.RowColor("Locked background", ref settings.LockedBackgroundColor, _defaults.LockedBackgroundColor);
-                M3Widgets.RowColor("Unlocked background", ref settings.UnlockedBackgroundColor, _defaults.UnlockedBackgroundColor);
             }
 
             using (M3Card.Begin($"{key}_show", "Show", FontAwesomeIcon.Eye))
@@ -849,6 +848,16 @@ namespace ActionTimelineReborn.Windows
                 }
             }
 
+            int changed = ChangedColors(settings);
+            using (M3ExpandableCard.Scope card = M3ExpandableCard.Begin($"{key}_colors", "Colors", ref _colorsExpanded, FontAwesomeIcon.PaintBrush,
+                badge: changed > 0 ? $"{changed} changed" : null))
+            {
+                if (card.Expanded)
+                {
+                    DrawColors(settings, index, changed);
+                }
+            }
+
             using (M3Card.Begin($"{key}_remove", null, style: M3CardStyle.Outlined))
             {
                 bool canRemove = Settings.TimelineSettings.Count > 1;
@@ -863,6 +872,142 @@ namespace ActionTimelineReborn.Windows
 
                 M3SettingRow.End(row);
             }
+        }
+
+        private static void DrawColors(DrawingSettings settings, int index, int changed)
+        {
+            using ImRaii.IdDisposable id = ImRaii.PushId("colors");
+            bool live = !settings.IsRotation;
+
+            M3Text.Draw("Colors you haven't changed follow the accent color. Reset one to make it follow the accent color again.", M3TextStyle.Muted, wrap: true);
+
+            M3Widgets.SectionLabel("Window");
+            M3Widgets.RowColor("Locked background", ref settings.LockedBackgroundColor, _defaults.LockedBackgroundColor);
+            M3Widgets.RowColor("Unlocked background", ref settings.UnlockedBackgroundColor, _defaults.UnlockedBackgroundColor);
+            ColorRow(settings, TimelineColor.LaneBackground, "Lanes", "Behind each row of actions and statuses.");
+            ColorRow(settings, TimelineColor.UpcomingShade, "Upcoming time", "Shades the lanes past now.", live);
+            ColorRow(settings, TimelineColor.Hover, "Hover highlight", "Covers whatever the mouse is over.");
+
+            M3Widgets.SectionLabel("GCDs");
+            ColorRow(settings, TimelineColor.GcdBar, "GCD bar", "Spans each GCD's recast.");
+            ColorRow(settings, TimelineColor.CastingGcdBar, "Casting GCD bar", "A GCD you're still casting.");
+            ColorRow(settings, TimelineColor.CanceledGcdBar, "Canceled GCD bar");
+            ColorRow(settings, TimelineColor.CastProgress, "Cast progress", "Fills the bar for as long as the cast took.");
+            ColorRow(settings, TimelineColor.CanceledCast, "Canceled cast", "Fills and outlines the bar of a canceled cast.");
+            ColorRow(settings, TimelineColor.Clipping, "Clipping gap", "Highligts the gap before a late GCD.", settings.ShowGCDClipping);
+
+            M3Widgets.SectionLabel("Actions");
+            ColorRow(settings, TimelineColor.IconBorder, "Icon border", "Outlines action icons that don't have a damage type ring.");
+            ColorRow(settings, TimelineColor.AnimationLock, "Animation lock line", enabled: settings.ShowAnimationLock);
+            ColorRow(settings, TimelineColor.AutoAttack, "Auto attack dot", enabled: settings.ShowAutoAttack);
+
+            M3Widgets.SectionLabel("Damage type");
+            ColorRow(settings, TimelineColor.DirectHit, "Direct hit ring", enabled: settings.ShowDamageType);
+            ColorRow(settings, TimelineColor.CriticalHit, "Critical hit ring", enabled: settings.ShowDamageType);
+            ColorRow(settings, TimelineColor.CriticalDirectHit, "Critical direct hit ring", enabled: settings.ShowDamageType);
+
+            M3Widgets.SectionLabel("Statuses");
+            ColorRow(settings, TimelineColor.StatusGained, "Status gained", "Underlines a status that was gained or went up in stacks.", settings.ShowStatus);
+            ColorRow(settings, TimelineColor.StatusLost, "Status lost", "Underlines a status that was lost or went down in stacks.", settings.ShowStatus);
+
+            M3Widgets.SectionLabel("Time");
+            ColorRow(settings, TimelineColor.AxisLines, "Time gridlines", "Marks each step back in time.");
+            ColorRow(settings, TimelineColor.NowLine, "Now line", enabled: live);
+
+            M3Widgets.SectionLabel("Text");
+            ColorRow(settings, TimelineColor.AxisText, "Time labels", "The seconds under the lanes.");
+            ColorRow(settings, TimelineColor.NowText, "Now label", enabled: live);
+            ColorRow(settings, TimelineColor.ClippingText, "Clipping time", "How late each clipped GCD started.", settings.ShowGCDClipping);
+            ColorRow(settings, TimelineColor.EmptyText, "Empty timeline message", "Shown until you use your first action.");
+
+            ImGui.Dummy(new Vector2(0f, M3.Space1));
+            M3Flow flow = new();
+
+            flow.Next(M3Widgets.ButtonWidth(FontAwesomeIcon.Undo, "Reset colors"));
+            if (M3Widgets.Button("##colors_reset", "Reset colors", M3ButtonStyle.Text, FontAwesomeIcon.Undo, enabled: changed > 0))
+            {
+                ResetColors(settings, index);
+            }
+
+            if (Settings.TimelineSettings.Count > 1)
+            {
+                flow.Next(M3Widgets.ButtonWidth(FontAwesomeIcon.Copy, "Copy to other timelines"));
+                if (M3Widgets.Button("##colors_copy", "Copy to other timelines", M3ButtonStyle.Tonal, FontAwesomeIcon.Copy,
+                    tooltip: "Gives every other timeline these colors."))
+                {
+                    CopyColors(settings, index);
+                }
+            }
+        }
+
+        // Only colors that differ from the theme are kept, so the rest keep following the accent color.
+        private static void ColorRow(DrawingSettings settings, TimelineColor part, string label, string? supporting = null, bool enabled = true)
+        {
+            Vector4 theme = TimelineColors.Default(part);
+            Vector4 color = settings.GetColor(part);
+            if (!M3Widgets.RowColor(label, ref color, theme, supporting, enabled: enabled))
+            {
+                return;
+            }
+
+            if (color == theme)
+            {
+                settings.Colors.Remove(part);
+            }
+            else
+            {
+                settings.Colors[part] = color;
+            }
+        }
+
+        private static int ChangedColors(DrawingSettings settings)
+        {
+            int changed = settings.Colors.Count;
+            if (settings.LockedBackgroundColor != _defaults.LockedBackgroundColor)
+            {
+                changed++;
+            }
+
+            if (settings.UnlockedBackgroundColor != _defaults.UnlockedBackgroundColor)
+            {
+                changed++;
+            }
+
+            return changed;
+        }
+
+        private static void ResetColors(DrawingSettings settings, int index)
+        {
+            DrawingSettings before = new();
+            before.CopyColorsFrom(settings);
+            settings.CopyColorsFrom(_defaults);
+
+            M3Snackbar.Show($"Reset the colors of {TimelineName(settings, index)}.", "Undo", () => settings.CopyColorsFrom(before));
+        }
+
+        private static void CopyColors(DrawingSettings source, int index)
+        {
+            List<(DrawingSettings Target, DrawingSettings Before)> copied = [];
+            foreach (DrawingSettings target in Settings.TimelineSettings)
+            {
+                if (target == source)
+                {
+                    continue;
+                }
+
+                DrawingSettings before = new();
+                before.CopyColorsFrom(target);
+                target.CopyColorsFrom(source);
+                copied.Add((target, before));
+            }
+
+            M3Snackbar.Show($"Copied the colors of {TimelineName(source, index)} to the other timelines.", "Undo", () =>
+            {
+                foreach ((DrawingSettings target, DrawingSettings before) in copied)
+                {
+                    target.CopyColorsFrom(before);
+                }
+            });
         }
 
         private void RemoveTimeline(DrawingSettings settings, int index)

@@ -25,4 +25,19 @@ public class DrawingSettings
     public bool ShowGCDClipping => !IsRotation && ShowGCDClippingSetting;
     public float GCDClippingThreshold = 0.15f;
     public int GCDClippingMaxTime = 2;
+
+    // Only the colors picked for this timeline. Everything else follows the theme.
+    public Dictionary<TimelineColor, Vector4> Colors = [];
+
+    public Vector4 GetColor(TimelineColor color)
+    {
+        return Colors.TryGetValue(color, out Vector4 value) ? value : TimelineColors.Default(color);
+    }
+
+    public void CopyColorsFrom(DrawingSettings other)
+    {
+        Colors = new Dictionary<TimelineColor, Vector4>(other.Colors);
+        LockedBackgroundColor = other.LockedBackgroundColor;
+        UnlockedBackgroundColor = other.UnlockedBackgroundColor;
+    }
 }
