@@ -13,7 +13,7 @@
 	</PropertyGroup>
 	<ItemGroup>
 	  <PackageReference Include="ECommons" Version="3.2.1.26" />
-	  <PackageReference Include="RebornMaterial" Version="7.5.7.3" />
+	  <PackageReference Include="RebornMaterial" Version="7.5.7.4" />
 	</ItemGroup>
 
 	<ItemGroup>
