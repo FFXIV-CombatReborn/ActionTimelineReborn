@@ -1,4 +1,5 @@
-﻿using System.Numerics;
+﻿using Newtonsoft.Json;
+using System.Numerics;
 
 namespace ActionTimelineReborn.Configurations;
 
@@ -7,7 +8,19 @@ public class DrawingSettings
     public string Name = "Major";
 
     public bool Enable = true;
-    public bool IsRotation = false;
+    public TimelineView View = TimelineView.Live;
+
+    [JsonProperty]
+    private bool IsRotation
+    {
+        set
+        {
+            if (value)
+            {
+                View = TimelineView.Rotation;
+            }
+        }
+    }
 
     public bool Locked = false;
     public Vector4 LockedBackgroundColor = new(0f, 0f, 0f, 0.5f);
@@ -22,7 +35,7 @@ public class DrawingSettings
     public float StatusIconScale = 1f;
 
     public bool ShowGCDClippingSetting = true;
-    public bool ShowGCDClipping => !IsRotation && ShowGCDClippingSetting;
+    public bool ShowGCDClipping => View == TimelineView.Live && ShowGCDClippingSetting;
     public float GCDClippingThreshold = 0.15f;
     public int GCDClippingMaxTime = 2;
 

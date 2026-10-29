@@ -46,6 +46,12 @@ namespace ActionTimelineReborn.Windows
         private const string TimelinePagePrefix = "timeline_";
 
         private static readonly string VersionLabel = $"v{typeof(SettingsWindow).Assembly.GetName().Version}";
+        private static readonly M3Segment[] _views =
+        [
+            new("Live", Tooltip: "Scrolls in real time."),
+            new("Rotation", Tooltip: "Shows actions as a fixed rotation."),
+            new("History", Tooltip: "Shows your last actions side by side, leaving out the time between them."),
+        ];
 
         private static readonly DrawingSettings _defaults = new();
         private static readonly Vector4 _koFiColor = new(1f, 0.357f, 0.369f, 1f);
@@ -798,8 +804,12 @@ namespace ActionTimelineReborn.Windows
             {
                 M3Widgets.RowText("Name", ref settings.Name, "Timeline name", "What this timeline is called in this list.", 32);
                 M3Widgets.RowSwitch("Enabled", ref settings.Enable);
-                M3Widgets.RowSwitch("Rotation view", ref settings.IsRotation,
-                    "Shows your last actions as a fixed rotation instead of scrolling in real time.");
+
+                int view = Math.Clamp((int)settings.View, 0, _views.Length - 1);
+                if (M3Widgets.RowSegmented("View", ref view, _views, _views[view].Tooltip))
+                {
+                    settings.View = (TimelineView)view;
+                }
             }
 
             using (M3Card.Begin($"{key}_window", "Window", FontAwesomeIcon.WindowMaximize))
@@ -808,11 +818,14 @@ namespace ActionTimelineReborn.Windows
                 M3Widgets.RowDragFloat("Scale", ref settings.Scale, 0.5f, 2f, "%.2fx", "Sizes everything on this timeline. Drag its edges to show more or less time.");
             }
 
+            bool history = settings.View == TimelineView.History;
             using (M3Card.Begin($"{key}_show", "Show", FontAwesomeIcon.Eye))
             {
                 M3Widgets.RowSwitch("Off-GCD actions", ref settings.ShowOGCD, "Adds a lane for off-GCD actions under the GCDs.");
-                M3Widgets.RowSwitch("Auto attacks", ref settings.ShowAutoAttack, "Marks each auto attack with a dot under the actions.");
-                M3Widgets.RowSwitch("Animation lock", ref settings.ShowAnimationLock, "Underlines each action for as long as it locks you out of others.");
+                M3Widgets.RowSwitch("Auto attacks", ref settings.ShowAutoAttack,
+                    history ? "Not shown in history view." : "Marks each auto attack with a dot under the actions.", enabled: !history);
+                M3Widgets.RowSwitch("Animation lock", ref settings.ShowAnimationLock,
+                    history ? "Not shown in history view." : "Underlines each action for as long as it locks you out of others.", enabled: !history);
                 M3Widgets.RowSwitch("Damage type", ref settings.ShowDamageType, "Rings the icons of direct and critical hits.");
                 M3Widgets.RowSwitch("Status line", ref settings.ShowStatus,
                     "Adds a lane under the actions marking each time a status you applied is gained, lost or changes stacks.");
@@ -825,9 +838,10 @@ namespace ActionTimelineReborn.Windows
 
             using (M3Card.Begin($"{key}_clipping", "GCD clipping", FontAwesomeIcon.Cut, subtitle: "Highlights the gap when a GCD starts late."))
             {
-                if (settings.IsRotation)
+                if (settings.View != TimelineView.Live)
                 {
-                    M3Widgets.Banner("##clipping_rotation", "Clipping isn't shown in rotation view.", M3Severity.Info, FontAwesomeIcon.InfoCircle);
+                    M3Widgets.Banner("##clipping_view", history ? "Clipping isn't shown in history view." : "Clipping isn't shown in rotation view.",
+                        M3Severity.Info, FontAwesomeIcon.InfoCircle);
                     ImGui.Dummy(new Vector2(0f, M3.Space2));
                 }
 
@@ -877,7 +891,8 @@ namespace ActionTimelineReborn.Windows
         private static void DrawColors(DrawingSettings settings, int index, int changed)
         {
             using ImRaii.IdDisposable id = ImRaii.PushId("colors");
-            bool live = !settings.IsRotation;
+            bool live = settings.View == TimelineView.Live;
+            bool timed = settings.View != TimelineView.History;
 
             M3Text.Draw("Colors you haven't changed follow the accent color. Reset one to make it follow the accent color again.", M3TextStyle.Muted, wrap: true);
 
@@ -889,17 +904,18 @@ namespace ActionTimelineReborn.Windows
             ColorRow(settings, TimelineColor.Hover, "Hover highlight", "Covers whatever the mouse is over.");
 
             M3Widgets.SectionLabel("GCDs");
-            ColorRow(settings, TimelineColor.GcdBar, "GCD bar", "Spans each GCD's recast.");
-            ColorRow(settings, TimelineColor.CastingGcdBar, "Casting GCD bar", "A GCD you're still casting.");
-            ColorRow(settings, TimelineColor.CanceledGcdBar, "Canceled GCD bar");
-            ColorRow(settings, TimelineColor.CastProgress, "Cast progress", "Fills the bar for as long as the cast took.");
-            ColorRow(settings, TimelineColor.CanceledCast, "Canceled cast", "Fills and outlines the bar of a canceled cast.");
+            ColorRow(settings, TimelineColor.GcdBar, "GCD bar", "Spans each GCD's recast.", timed);
+            ColorRow(settings, TimelineColor.CastingGcdBar, "Casting GCD bar", "A GCD you're still casting.", timed);
+            ColorRow(settings, TimelineColor.CanceledGcdBar, "Canceled GCD bar", enabled: timed);
+            ColorRow(settings, TimelineColor.CastProgress, "Cast progress", "Fills the bar for as long as the cast took.", timed);
+            ColorRow(settings, TimelineColor.CanceledCast, "Canceled cast",
+                timed ? "Fills and outlines the bar of a canceled cast." : "Outlines the icon of a canceled cast.");
             ColorRow(settings, TimelineColor.Clipping, "Clipping gap", "Highligts the gap before a late GCD.", settings.ShowGCDClipping);
 
             M3Widgets.SectionLabel("Actions");
             ColorRow(settings, TimelineColor.IconBorder, "Icon border", "Outlines action icons that don't have a damage type ring.");
-            ColorRow(settings, TimelineColor.AnimationLock, "Animation lock line", enabled: settings.ShowAnimationLock);
-            ColorRow(settings, TimelineColor.AutoAttack, "Auto attack dot", enabled: settings.ShowAutoAttack);
+            ColorRow(settings, TimelineColor.AnimationLock, "Animation lock line", enabled: settings.ShowAnimationLock && timed);
+            ColorRow(settings, TimelineColor.AutoAttack, "Auto attack dot", enabled: settings.ShowAutoAttack && timed);
 
             M3Widgets.SectionLabel("Damage type");
             ColorRow(settings, TimelineColor.DirectHit, "Direct hit ring", enabled: settings.ShowDamageType);
@@ -911,11 +927,11 @@ namespace ActionTimelineReborn.Windows
             ColorRow(settings, TimelineColor.StatusLost, "Status lost", "Underlines a status that was lost or went down in stacks.", settings.ShowStatus);
 
             M3Widgets.SectionLabel("Time");
-            ColorRow(settings, TimelineColor.AxisLines, "Time gridlines", "Marks each step back in time.");
+            ColorRow(settings, TimelineColor.AxisLines, "Time gridlines", "Marks each step back in time.", timed);
             ColorRow(settings, TimelineColor.NowLine, "Now line", enabled: live);
 
             M3Widgets.SectionLabel("Text");
-            ColorRow(settings, TimelineColor.AxisText, "Time labels", "The seconds under the lanes.");
+            ColorRow(settings, TimelineColor.AxisText, "Time labels", "The seconds under the lanes.", timed);
             ColorRow(settings, TimelineColor.NowText, "Now label", enabled: live);
             ColorRow(settings, TimelineColor.ClippingText, "Clipping time", "How late each clipped GCD started.", settings.ShowGCDClipping);
             ColorRow(settings, TimelineColor.EmptyText, "Empty timeline message", "Shown until you use your first action.");
