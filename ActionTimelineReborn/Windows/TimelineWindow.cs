@@ -38,12 +38,9 @@ internal static class TimelineWindow
 
     private const float FutureSeconds = 2f;
 
-    // Status changes are moments rather than spans, so look back far enough to keep the ones still poking in from the left.
     private const float StatusLookbackSeconds = 2f;
 
     private const float StatusIconAspect = 0.75f;
-
-    private const string EmptyText = "Actions show up here as you use them.";
 
     private static readonly int[] AxisSteps = [1, 2, 5, 10, 15, 30, 60];
 
@@ -215,7 +212,7 @@ internal static class TimelineWindow
 
         if (history)
         {
-            drawn = DrawHistory(drawList, setting, axis.Left, axis.Right, gcdTop, ogcdTop, statusTop + (IconInset * scale), ref hover);
+            _ = DrawHistory(drawList, setting, axis.Left, axis.Right, gcdTop, ogcdTop, statusTop + (IconInset * scale), ref hover);
         }
         else
         {
@@ -277,11 +274,6 @@ internal static class TimelineWindow
 
                 DrawNowLine(drawList, setting, axis, gcdTop, lanesBottom, axisTop);
             }
-        }
-
-        if (drawn == 0)
-        {
-            DrawEmpty(drawList, setting, axis, gcdTop, gcdBottom);
         }
 
         if (hover.Found)
@@ -890,19 +882,6 @@ internal static class TimelineWindow
         float labelWidth = ImGui.CalcTextSize(label).X;
         float labelX = MathF.Min(axis.NowX - (labelWidth * 0.5f), axis.Right - labelWidth);
         drawList.AddText(new Vector2(labelX, labelTop), M3.U32(setting.GetColor(TimelineColor.NowText)), label);
-    }
-
-    private static void DrawEmpty(ImDrawListPtr drawList, DrawingSettings setting, in Axis axis, float top, float bottom)
-    {
-        Vector2 size = ImGui.CalcTextSize(EmptyText);
-        float room = axis.NowX - axis.Left - (M3.Space3 * 2f);
-        if (size.X > room)
-        {
-            return;
-        }
-
-        Vector2 position = new(((axis.Left + axis.NowX) - size.X) * 0.5f, ((top + bottom) - size.Y) * 0.5f);
-        drawList.AddText(position, M3.U32(setting.GetColor(TimelineColor.EmptyText)), EmptyText);
     }
     #endregion
 
