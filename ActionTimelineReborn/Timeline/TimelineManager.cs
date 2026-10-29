@@ -116,7 +116,7 @@ public class TimelineManager : IDisposable
 
     public DateTime EndTime { get; private set; } = DateTime.Now;
     private static readonly int kMaxItemCount = 2048;
-    private readonly Queue<TimelineItem> _items = new(kMaxItemCount);
+    private readonly List<TimelineItem> _items = new(kMaxItemCount);
     private TimelineItem? _lastItem = null;
 
     private DateTime _lastTime = DateTime.MinValue;
@@ -129,9 +129,9 @@ public class TimelineManager : IDisposable
 
         if (_items.Count >= 2048)
         {
-            _items.Dequeue();
+            _items.RemoveAt(0);
         }
-        _items.Enqueue(item);
+        _items.Add(item);
         if (item.Type != TimelineItemType.AutoAttack)
         {
             _lastItem = item;
@@ -148,9 +148,11 @@ public class TimelineManager : IDisposable
         }
     }
 
+    public IReadOnlyList<TimelineItem> Items => _items;
+
     public List<TimelineItem> GetItems(DateTime time, out DateTime lastEndTime)
     {
-        List<TimelineItem> result = new List<TimelineItem>();
+        List<TimelineItem> result = [];
         lastEndTime = DateTime.Now;
         foreach (TimelineItem item in _items)
         {
@@ -315,7 +317,7 @@ public class TimelineManager : IDisposable
 
     private static List<T> GetItems<T>(IEnumerable<T> items, DateTime time, out DateTime lastEndTime) where T : ITimelineItem
     {
-        List<T> result = new List<T>();
+        List<T> result = [];
         lastEndTime = DateTime.Now;
         foreach (T item in items)
         {

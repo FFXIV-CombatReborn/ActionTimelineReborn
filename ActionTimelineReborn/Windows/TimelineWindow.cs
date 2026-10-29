@@ -34,6 +34,8 @@ internal static class TimelineWindow
     private const float NowCapRadius = 3.5f;
     private const float ClipLabelPadding = 3f;
 
+    private const float HistoryGap = 4f;
+
     private const float FutureSeconds = 2f;
 
     // Status changes are moments rather than spans, so look back far enough to keep the ones still poking in from the left.
@@ -61,6 +63,11 @@ internal static class TimelineWindow
 
     private static readonly ConditionalWeakTable<DrawingSettings, Layout> _layouts = [];
     private static readonly Dictionary<TimelineItem, float> _gcdEnds = [];
+
+    private static readonly List<HistorySlot> _history = [];
+    private static readonly List<float> _historyStatusX = [];
+
+    private readonly record struct HistorySlot(TimelineItem Item, float X);
 
     private readonly record struct Axis(DateTime Now, float NowX, float SecondWidth, float Left, float Right)
     {
@@ -142,7 +149,8 @@ internal static class TimelineWindow
         float scale = M3.Scale;
         ImGuiStylePtr style = ImGui.GetStyle();
         ImDrawListPtr drawList = ImGui.GetWindowDrawList();
-        bool live = !setting.IsRotation;
+        bool live = setting.View == TimelineView.Live;
+        bool history = setting.View == TimelineView.History;
 
         Vector2 origin = ImGui.GetCursorScreenPos();
         float width = MathF.Max(1f, ImGui.GetContentRegionAvail().X);
@@ -165,7 +173,8 @@ internal static class TimelineWindow
         float statusHeight = ((StatusIconHeight * setting.StatusIconScale) + MarkerUnderline + (IconInset * 2f)) * scale;
         float lanesBottom = setting.ShowStatus ? statusTop + statusHeight : actionsBottom;
         float axisTop = lanesBottom + laneGap;
-        float height = axisTop + labelHeight - origin.Y;
+
+        float height = (history ? lanesBottom : axisTop + labelHeight) - origin.Y;
 
         ImGui.Dummy(new Vector2(width, height));
 
@@ -175,16 +184,9 @@ internal static class TimelineWindow
 
         float right = origin.X + width;
         float secondWidth = SecondWidth * scale;
-        DateTime now = live ? DateTime.Now : TimelineManager.Instance?.EndTime ?? DateTime.Now;
+        DateTime now = setting.View == TimelineView.Rotation ? TimelineManager.Instance?.EndTime ?? DateTime.Now : DateTime.Now;
         float future = live ? MathF.Min(FutureSeconds, width / secondWidth * 0.3f) : 0f;
         Axis axis = new(now, right - (future * secondWidth), secondWidth, origin.X, right);
-
-        DateTime since = axis.Now.AddSeconds(-(axis.NowX - axis.Left) / secondWidth);
-        DateTime lastGcdEnd = DateTime.MinValue;
-        List<TimelineItem>? items = TimelineManager.Instance?.GetItems(since, out lastGcdEnd);
-        List<StatusChangeItem>? statuses = setting.ShowStatus
-            ? TimelineManager.Instance?.GetStatusChanges(since.AddSeconds(-StatusLookbackSeconds))
-            : null;
 
         Vector2 windowPos = ImGui.GetWindowPos();
         Vector2 windowSize = ImGui.GetWindowSize();
@@ -211,56 +213,70 @@ internal static class TimelineWindow
             DrawLaneTrack(drawList, setting, axis, statusTop, lanesBottom);
         }
 
-        DrawAxis(drawList, setting, axis, gcdTop, lanesBottom, axisTop, labelWidth);
-
-        _gcdEnds.Clear();
-        if (setting.ShowGCDClipping && items != null)
+        if (history)
         {
-            DrawClipping(drawList, setting, items, lastGcdEnd, axis, gcdTop, gcdBottom, ref hover);
+            drawn = DrawHistory(drawList, setting, axis.Left, axis.Right, gcdTop, ogcdTop, statusTop + (IconInset * scale), ref hover);
         }
-
-        if (statuses != null)
+        else
         {
-            DrawStatusChanges(drawList, statuses, setting, axis, statusTop + (IconInset * scale), ref hover);
-        }
+            DateTime since = axis.Now.AddSeconds(-(axis.NowX - axis.Left) / secondWidth);
+            DateTime lastGcdEnd = DateTime.MinValue;
+            List<TimelineItem>? items = TimelineManager.Instance?.GetItems(since, out lastGcdEnd);
+            List<StatusChangeItem>? statuses = setting.ShowStatus
+                ? TimelineManager.Instance?.GetStatusChanges(since.AddSeconds(-StatusLookbackSeconds))
+                : null;
 
-        if (items != null)
-        {
-            foreach (TimelineItem item in items)
+            DrawAxis(drawList, setting, axis, gcdTop, lanesBottom, axisTop, labelWidth);
+
+            _gcdEnds.Clear();
+            if (setting.ShowGCDClipping && items != null)
             {
-                Vector2 min, max;
-                bool visible = item.Type switch
-                {
-                    TimelineItemType.GCD => DrawGcd(drawList, item, setting, axis, gcdTop, gcdBottom, out min, out max),
-                    TimelineItemType.OGCD when setting.ShowOGCD => DrawOgcd(drawList, item, setting, axis, ogcdTop, ogcdBottom, out min, out max),
-                    TimelineItemType.AutoAttack when setting.ShowAutoAttack => DrawAutoAttack(drawList, item, setting, axis, actionsBottom + (laneGap * 0.5f), out min, out max),
-                    _ => Skip(out min, out max),
-                };
+                DrawClipping(drawList, setting, items, lastGcdEnd, axis, gcdTop, gcdBottom, ref hover);
+            }
 
-                if (!visible)
+            if (statuses != null)
+            {
+                DrawStatusChanges(drawList, statuses, setting, axis, statusTop + (IconInset * scale), ref hover);
+            }
+
+            if (items != null)
+            {
+                foreach (TimelineItem item in items)
                 {
-                    continue;
+                    Vector2 min, max;
+                    bool visible = item.Type switch
+                    {
+                        TimelineItemType.GCD => DrawGcd(drawList, item, setting, axis, gcdTop, gcdBottom, out min, out max),
+                        TimelineItemType.OGCD when setting.ShowOGCD => DrawOgcd(drawList, item, setting, axis, ogcdTop, ogcdBottom, out min, out max),
+                        TimelineItemType.AutoAttack when setting.ShowAutoAttack => DrawAutoAttack(drawList, item, setting, axis, actionsBottom + (laneGap * 0.5f), out min, out max),
+                        _ => Skip(out min, out max),
+                    };
+
+                    if (!visible)
+                    {
+                        continue;
+                    }
+
+                    drawn++;
+                    hover.Check(min, max, item);
+                }
+            }
+
+            if (live)
+            {
+                DrawFuture(drawList, setting, axis, gcdTop, gcdBottom);
+                if (setting.ShowOGCD)
+                {
+                    DrawFuture(drawList, setting, axis, ogcdTop, ogcdBottom);
                 }
 
-                drawn++;
-                hover.Check(min, max, item);
-            }
-        }
+                if (setting.ShowStatus)
+                {
+                    DrawFuture(drawList, setting, axis, statusTop, lanesBottom);
+                }
 
-        if (live)
-        {
-            DrawFuture(drawList, setting, axis, gcdTop, gcdBottom);
-            if (setting.ShowOGCD)
-            {
-                DrawFuture(drawList, setting, axis, ogcdTop, ogcdBottom);
+                DrawNowLine(drawList, setting, axis, gcdTop, lanesBottom, axisTop);
             }
-
-            if (setting.ShowStatus)
-            {
-                DrawFuture(drawList, setting, axis, statusTop, lanesBottom);
-            }
-
-            DrawNowLine(drawList, setting, axis, gcdTop, lanesBottom, axisTop);
         }
 
         if (drawn == 0)
@@ -277,7 +293,7 @@ internal static class TimelineWindow
 
         if (hover.Item != null)
         {
-            DrawTooltip(hover.Item, setting, axis.Now, live);
+            DrawTooltip(hover.Item, setting, axis.Now, live || history);
         }
         else if (hover.Text != null)
         {
@@ -637,6 +653,176 @@ internal static class TimelineWindow
 
             last = item.EndTime;
             previous = item;
+        }
+    }
+    #endregion
+
+    #region History
+    // Each GCD packed against the one before it, newest at the right, with the off-GCD actions used after it underneath.
+    // No time is shown, so the actions stay however long ago they were used.
+    private static int DrawHistory(ImDrawListPtr drawList, DrawingSettings setting, float left, float right, float gcdTop, float ogcdTop, float statusTop, ref Hover hover)
+    {
+        IReadOnlyList<TimelineItem>? items = TimelineManager.Instance?.Items;
+        if (items == null)
+        {
+            return 0;
+        }
+
+        float scale = M3.Scale;
+        float inset = IconInset * scale;
+        float gcdSize = (GcdLaneHeight - (IconInset * 2f)) * scale;
+        float ogcdSize = (OgcdLaneHeight - (IconInset * 2f)) * scale;
+        PlaceHistory(items, setting.ShowOGCD, left, right - inset, gcdSize, ogcdSize, HistoryGap * scale);
+
+        int drawn = 0;
+        foreach (HistorySlot slot in _history)
+        {
+            bool gcd = slot.Item.Type == TimelineItemType.GCD;
+            float top = gcd ? gcdTop : ogcdTop;
+            float size = gcd ? gcdSize : ogcdSize;
+            if (slot.X + size < left)
+            {
+                continue;
+            }
+
+            DrawHistoryIcon(drawList, slot.Item, setting, new Vector2(slot.X, top + inset), size);
+            hover.Check(new Vector2(slot.X, top), new Vector2(slot.X + size, top + size + (inset * 2f)), slot.Item);
+            drawn++;
+        }
+
+        if (setting.ShowStatus)
+        {
+            DrawHistoryStatuses(drawList, setting, left, right - inset, statusTop, ref hover);
+        }
+
+        return drawn;
+    }
+
+    // Fills the history from the right edge until it reaches the left one.
+    private static void PlaceHistory(IReadOnlyList<TimelineItem> items, bool showOgcd, float left, float right, float gcdSize, float ogcdSize, float gap)
+    {
+        _history.Clear();
+
+        // Going back from the newest, the off-GCD actions come up before the GCD they were used after, so they wait for it.
+        float edge = right;
+        int woven = 0;
+        for (int i = items.Count - 1; i >= 0 && edge > left; i--)
+        {
+            TimelineItem item = items[i];
+            if (item.Type == TimelineItemType.OGCD && showOgcd)
+            {
+                _history.Add(new HistorySlot(item, 0f));
+                woven++;
+            }
+            else if (item.Type == TimelineItemType.GCD)
+            {
+                float x = PlaceColumn(edge, gcdSize, woven, ogcdSize, gap);
+                _history.Add(new HistorySlot(item, x));
+                woven = 0;
+                edge = x - gap;
+            }
+        }
+
+        // Used before the oldest GCD still kept.
+        if (woven > 0)
+        {
+            PlaceColumn(edge, 0f, woven, ogcdSize, gap);
+        }
+    }
+
+    // Lines up the off-GCD actions waiting at the end of the history from the left of their column, oldest first, and returns where the column starts.
+    private static float PlaceColumn(float edge, float gcdSize, int woven, float ogcdSize, float gap)
+    {
+        float step = ogcdSize + gap;
+        float x = edge - MathF.Max(gcdSize, (woven * step) - gap);
+        for (int i = 0; i < woven; i++)
+        {
+            int slot = _history.Count - 1 - i;
+            _history[slot] = _history[slot] with { X = x + (i * step) };
+        }
+
+        return x;
+    }
+
+    // In place of the GCD bar, a cast fills its icon in as it goes and a canceled one fades with an outline.
+    private static void DrawHistoryIcon(ImDrawListPtr drawList, TimelineItem item, DrawingSettings setting, Vector2 min, float size)
+    {
+        if (item.State == TimelineItemState.Canceled)
+        {
+            DrawIcon(drawList, item, setting, min, size, M3.DisabledContent);
+            drawList.AddRect(min, min + new Vector2(size), M3.U32(Fade(setting.GetColor(TimelineColor.CanceledCast), 0.8f)),
+                M3ActionIcon.Rounding(size), ImDrawFlags.None, 1f * M3.Scale);
+            return;
+        }
+
+        float cast = item.State == TimelineItemState.Casting && item.CastingTime > 0f
+            ? (float)(DateTime.Now - item.StartTime).TotalSeconds / item.CastingTime
+            : 1f;
+        if (cast >= 1f)
+        {
+            DrawIcon(drawList, item, setting, min, size, 1f);
+            return;
+        }
+
+        DrawIcon(drawList, item, setting, min, size, M3.DisabledContent);
+        drawList.PushClipRect(min, new Vector2(min.X + (size * cast), min.Y + size), true);
+        DrawIcon(drawList, item, setting, min, size, 1f);
+        drawList.PopClipRect();
+    }
+
+    private static void DrawHistoryStatuses(ImDrawListPtr drawList, DrawingSettings setting, float left, float right, float top, ref Hover hover)
+    {
+        if (_history.Count == 0)
+        {
+            return;
+        }
+
+        List<StatusChangeItem>? changes = TimelineManager.Instance?.GetStatusChanges(_history[^1].Item.StartTime);
+        if (changes == null)
+        {
+            return;
+        }
+
+        float scale = M3.Scale;
+        float iconHeight = StatusIconHeight * setting.StatusIconScale * scale;
+        Vector2 size = new(iconHeight * StatusIconAspect, iconHeight);
+        PlaceHistoryStatuses(changes, right, size.X, 1f * scale);
+
+        for (int i = changes.Count - 1; i >= 0; i--)
+        {
+            float x = _historyStatusX[i];
+            if (x + size.X < left)
+            {
+                break;
+            }
+
+            DrawStatusChange(drawList, changes[i], setting, new Vector2(x, top), size, ref hover);
+        }
+    }
+
+    // Each status change sits under the action it came after, side by side like on the other views.
+    // The newest are then pulled back in from the right edge, so the ones that just happened stay in view.
+    private static void PlaceHistoryStatuses(List<StatusChangeItem> changes, float right, float width, float gap)
+    {
+        _historyStatusX.Clear();
+        int anchor = _history.Count - 1;
+        float next = float.MinValue;
+        foreach (StatusChangeItem change in changes)
+        {
+            while (anchor > 0 && _history[anchor - 1].Item.StartTime <= change.StartTime)
+            {
+                anchor--;
+            }
+
+            float x = MathF.Max(_history[anchor].X, next);
+            _historyStatusX.Add(x);
+            next = x + width + gap;
+        }
+
+        for (int i = changes.Count - 1; i >= 0; i--)
+        {
+            _historyStatusX[i] = MathF.Min(_historyStatusX[i], right - width);
+            right = _historyStatusX[i] - gap;
         }
     }
     #endregion

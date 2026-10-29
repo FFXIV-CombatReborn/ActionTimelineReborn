@@ -78,7 +78,7 @@ public class Plugin : IDalamudPlugin
         }
     }
 
-    private void CreateWindows()
+    private static void CreateWindows()
     {
         _settingsWindow = new SettingsWindow();
 
