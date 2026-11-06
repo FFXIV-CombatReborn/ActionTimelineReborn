@@ -53,6 +53,17 @@ namespace ActionTimelineReborn.Windows
             new("History", Tooltip: "Shows your last actions side by side, leaving out the time between them."),
         ];
 
+        private static readonly M3ColorChoice[] _accentPresets =
+        [
+            new("Crimson (default)", M3.DefaultSeed),
+            new("Sapphire", M3ColorMath.FromRgb(0x2F6DB5)),
+            new("Teal", M3ColorMath.FromRgb(0x00897B)),
+            new("Forest", M3ColorMath.FromRgb(0x3E8E41)),
+            new("Amber", M3ColorMath.FromRgb(0xC98A00)),
+            new("Violet", M3ColorMath.FromRgb(0x7E57C2)),
+            new("Rose", M3ColorMath.FromRgb(0xC2185B)),
+        ];
+
         private static readonly DrawingSettings _defaults = new();
         private static readonly Vector4 _koFiColor = new(1f, 0.357f, 0.369f, 1f);
 
@@ -542,15 +553,13 @@ namespace ActionTimelineReborn.Windows
                 M3Widgets.RowSwitch("Record target statuses", ref Settings.RecordTargetStatus,
                     "Also show statuses you put on others, like damage over time, not only the ones on you.");
 
-                M3RowInfo row = M3SettingRow.Begin("Clear timeline data", "Removes everything recorded so far and frees the memory it used.",
-                    new Vector2(M3Widgets.ButtonWidth(FontAwesomeIcon.TrashAlt, "Clear"), M3Widgets.ButtonHeight));
-                if (M3Widgets.HoldButton("##clear_data", "Clear", icon: FontAwesomeIcon.TrashAlt, tooltip: "Hold to clear all timeline data"))
+                if (M3Widgets.RowHoldButton("Clear timeline data###clear_data", "Clear",
+                    "Removes everything recorded so far and frees the memory it used.",
+                    icon: FontAwesomeIcon.TrashAlt, tooltip: "Hold to clear all timeline data"))
                 {
                     TimelineManager.Instance?.ClearAllData();
                     M3Snackbar.Show("All timeline data cleared.");
                 }
-
-                M3SettingRow.End(row);
             }
 
             using (M3Card.Begin("general_chat", "Chat", FontAwesomeIcon.CommentDots))
@@ -721,9 +730,10 @@ namespace ActionTimelineReborn.Windows
             using (M3Card.Begin("appearance_theme", "Theme", FontAwesomeIcon.Palette, subtitle: "Applies to this window and the timelines."))
             {
                 Vector4 accent = Settings.UiAccentColor;
-                if (M3Widgets.RowColor("Accent color", ref accent, M3.DefaultSeed, "The whole color scheme is built from this one color.", alpha: false))
+                if (M3Widgets.RowColorChoices("Accent color", ref accent, _accentPresets,
+                    "The whole color scheme is built from this one color. Pick a preset, or the last swatch for your own color."))
                 {
-                    Settings.UiAccentColor = accent;
+                    Settings.UiAccentColor = accent with { W = 1f };
                 }
             }
 
@@ -753,6 +763,17 @@ namespace ActionTimelineReborn.Windows
                     Settings.UiTextScale = 1f;
                     Settings.UiElementScale = 1f;
                     Settings.UiPaddingScale = 1f;
+                }
+            }
+
+            using (M3Card.Begin("appearance_motion", "Motion", FontAwesomeIcon.Film))
+            {
+                float motionPercent = Settings.UiMotionScale * 100f;
+                if (M3Widgets.RowDragFloat("Animation length", ref motionPercent, 0f, 200f, "%.0f%%",
+                    "Scales how long animations take in the plugin's windows, such as folding this window and opening cards. Set it to 0% to turn them off.",
+                    step: 1f))
+                {
+                    Settings.UiMotionScale = MathF.Round(motionPercent) / 100f;
                 }
             }
         }
@@ -875,16 +896,12 @@ namespace ActionTimelineReborn.Windows
             using (M3Card.Begin($"{key}_remove", null, style: M3CardStyle.Outlined))
             {
                 bool canRemove = Settings.TimelineSettings.Count > 1;
-                M3RowInfo row = M3SettingRow.Begin("Remove timeline",
+                if (M3Widgets.RowHoldButton("Remove timeline###remove_timeline", "Remove",
                     canRemove ? "Hold the button to remove this timeline." : "You need at least one timeline.",
-                    new Vector2(M3Widgets.ButtonWidth(FontAwesomeIcon.TrashAlt, "Remove"), M3Widgets.ButtonHeight));
-                if (M3Widgets.HoldButton("##remove_timeline", "Remove", icon: FontAwesomeIcon.TrashAlt, enabled: canRemove,
-                    tooltip: canRemove ? null : "You need at least one timeline."))
+                    icon: FontAwesomeIcon.TrashAlt, enabled: canRemove))
                 {
                     RemoveTimeline(settings, index);
                 }
-
-                M3SettingRow.End(row);
             }
         }
 
