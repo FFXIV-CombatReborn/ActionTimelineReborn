@@ -363,7 +363,7 @@ namespace ActionTimelineReborn.Windows
 
             if (expanded)
             {
-                const string tagline = "REBORN";
+                var tagline = $"v{Plugin.Version}";
                 float textX = center.X + (badge * 0.5f) + (10f * scale);
                 float textWidth = MathF.Max(16f * scale, max.X - textX - (4f * scale));
                 float gap = 1f * scale;

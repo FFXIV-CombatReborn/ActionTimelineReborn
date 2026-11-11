@@ -16,7 +16,7 @@ public class Plugin : IDalamudPlugin
 {
     public static string Name => "ActionTimelineReborn";
 
-    public static string Version { get; private set; } = "";
+    internal static readonly string Version = typeof(Plugin).Assembly.GetName().Version?.ToString() ?? "0.0.0.0";
 
     public static Settings Settings { get; private set; } = null!;
 
