@@ -30,11 +30,20 @@ namespace ActionTimelineReborn.Windows
             MaximumSize = new Vector2(5000f, 5000f),
         };
 
-        private const string LogoResource = "ActionTimelineReborn.Resources.ATR_Icon.png";
+        private const string BrandName = "Action Timeline";
+        private const float BrandLogoSize = 40f;
+        private const float DrawerLayoutWidth = 600f;
+        private const float DrawerMinWidth = 190f;
+        private const float RailWidth = 84f;
+        private const float ScaleStep = 0.05f;
+        private const float MotionStepPercent = 5f;
+
+        private const string DiscordUrl = "https://discord.gg/p54TZMPnC9";
         private const string KofiUrl = "https://ko-fi.com/ltscombatreborn";
 
         private static readonly M3WindowAction[] _windowActions =
         [
+            new("##window_discord", FontAwesomeIcon.Comments, "Join the Discord"),
             new("##window_kofi", FontAwesomeIcon.MugHot, "Support the developer on Ko-fi"),
         ];
 
@@ -55,13 +64,13 @@ namespace ActionTimelineReborn.Windows
 
         private static readonly M3ColorChoice[] _accentPresets =
         [
-            new("Crimson (default)", M3.DefaultSeed),
-            new("Sapphire", M3ColorMath.FromRgb(0x2F6DB5)),
+            new("Purple (default)", Settings.DefaultAccentColor),
+            new("Ocean", M3ColorMath.FromRgb(0x2F6DB5)),
             new("Teal", M3ColorMath.FromRgb(0x00897B)),
             new("Forest", M3ColorMath.FromRgb(0x3E8E41)),
             new("Amber", M3ColorMath.FromRgb(0xC98A00)),
             new("Violet", M3ColorMath.FromRgb(0x7E57C2)),
-            new("Rose", M3ColorMath.FromRgb(0xC2185B)),
+            new("Crimson", M3.DefaultSeed),
         ];
 
         private static readonly DrawingSettings _defaults = new();
@@ -77,7 +86,9 @@ namespace ActionTimelineReborn.Windows
         private int _newStatusId;
         private bool _colorsExpanded;
 
-        private static M3WindowBrand Brand => new(GetLogo(), "ATR", FontAwesomeIcon.Stream);
+        private static M3WindowBrand Brand => M3Brand.For("ATR");
+
+        private static float IconStripWidth => MathF.Max(44f * M3.Scale, (UiBuilder.IconFont.FontSize * 1.25f) + (8f * M3.Scale));
 
         public SettingsWindow() : base("ActionTimelineReborn###atr_settings", BaseFlags)
         {
@@ -88,12 +99,6 @@ namespace ActionTimelineReborn.Windows
 
             AllowPinning = false;
             AllowClickthrough = false;
-        }
-
-        private static IDalamudTextureWrap? GetLogo()
-        {
-            return Svc.Texture.GetFromManifestResource(typeof(SettingsWindow).Assembly, LogoResource)
-                .TryGetWrap(out IDalamudTextureWrap? logo, out _) ? logo : null;
         }
 
         internal void Open(int? timeline = null)
@@ -124,7 +129,7 @@ namespace ActionTimelineReborn.Windows
 
         public override void PreDraw()
         {
-            _theme = M3Style.Push();
+            _theme = M3Style.Push(M3Window.DefaultDensity);
 
             Flags = BaseFlags;
             if (_fold.Prepare(this, _shownActions, Brand))
@@ -180,7 +185,12 @@ namespace ActionTimelineReborn.Windows
             float scale = M3.Scale;
             Vector2 available = ImGui.GetContentRegionAvail();
             float spacing = ImGui.GetStyle().ItemSpacing.X;
-            float navWidth = (available.X >= 620f * scale ? 210f : 88f) * scale;
+            List<M3NavItem> items = BuildNavigationItems();
+            bool iconsOnly = Settings.UiIconSidebar;
+            bool expanded = !iconsOnly && available.X >= DrawerLayoutWidth * scale;
+            float navWidth = iconsOnly ? MathF.Min(IconStripWidth, available.X * 0.3f)
+                : expanded ? MathF.Min(DrawerWidth(items), available.X * 0.4f)
+                : MathF.Min(RailWidth * scale, available.X * 0.3f);
 
             Vector2 origin = ImGui.GetCursorScreenPos();
             float dividerX = origin.X + navWidth + (spacing * 0.5f);
@@ -189,7 +199,7 @@ namespace ActionTimelineReborn.Windows
                 new Vector2(dividerX, origin.Y + available.Y),
                 M3.U32(M3.Scheme.OutlineVariant, 0.45f), 1f * scale);
 
-            DrawNavigation(navWidth);
+            DrawNavigation(items, navWidth, expanded, iconsOnly);
             ImGui.SameLine(0f, spacing);
             DrawBody();
 
@@ -227,9 +237,15 @@ namespace ActionTimelineReborn.Windows
                 M3.Scheme.SurfaceContainerHigh);
 
             // Indices follow _windowActions.
-            if (pressed >= 0 && first + pressed == 0)
+            switch (pressed < 0 ? -1 : first + pressed)
             {
-                Util.OpenLink(KofiUrl);
+                case 0:
+                    Util.OpenLink(DiscordUrl);
+                    break;
+
+                case 1:
+                    Util.OpenLink(KofiUrl);
+                    break;
             }
 
             if (closed)
@@ -303,7 +319,30 @@ namespace ActionTimelineReborn.Windows
         #endregion
 
         #region Navigation
-        private void DrawNavigation(float width)
+        private static float DrawerWidth(List<M3NavItem> items)
+        {
+            float scale = M3.Scale;
+            float label = 0f;
+            foreach (M3NavItem item in items)
+            {
+                if (!item.Id.StartsWith(TimelinePagePrefix, StringComparison.Ordinal))
+                {
+                    label = MathF.Max(label, ImGui.CalcTextSize(item.Label).X);
+                }
+            }
+
+            float labelWidth = label + (44f * scale) + M3Style.Spacing(16f, 12f) + M3Style.Spacing(14f, 10f);
+            float brandWidth = MeasureText(M3.TitleMedium, BrandName).X + ((BrandLogoSize + 26f) * scale);
+            return MathF.Max(DrawerMinWidth * scale, MathF.Max(labelWidth, brandWidth));
+        }
+
+        private static Vector2 MeasureText(ImFontPtr font, string text)
+        {
+            using ImRaii.FontDisposable pushed = ImRaii.PushFont(font);
+            return ImGui.CalcTextSize(text);
+        }
+
+        private void DrawNavigation(List<M3NavItem> items, float width, bool expanded, bool iconsOnly)
         {
             using ImRaii.ChildDisposable nav = ImRaii.Child("##atr_nav", new Vector2(width, -1f), false, ImGuiWindowFlags.NoScrollbar);
             if (!nav)
@@ -311,17 +350,16 @@ namespace ActionTimelineReborn.Windows
                 return;
             }
 
-            bool expanded = ImGui.GetContentRegionAvail().X >= M3Navigation.DrawerBreakpoint * M3.Scale;
-
             DrawBrand(expanded);
-            ImGui.Dummy(new Vector2(0f, M3.Space2));
+            ImGui.Dummy(new Vector2(0f, M3.Space1));
 
             float footer = expanded ? M3Widgets.PillSize(VersionLabel, FontAwesomeIcon.CodeBranch).Y + M3.Space2 : 0f;
-            using (ImRaii.ChildDisposable list = ImRaii.Child("##atr_nav_list", new Vector2(-1f, MathF.Max(1f, ImGui.GetContentRegionAvail().Y - footer)), false))
+            using (ImRaii.ChildDisposable list = ImRaii.Child("##atr_nav_list", new Vector2(-1f, MathF.Max(1f, ImGui.GetContentRegionAvail().Y - footer)), false,
+                iconsOnly ? ImGuiWindowFlags.NoScrollbar : ImGuiWindowFlags.None))
             {
                 if (list)
                 {
-                    DrawNavigationItems(expanded);
+                    DrawNavigationItems(items, expanded, iconsOnly);
                 }
             }
 
@@ -336,8 +374,19 @@ namespace ActionTimelineReborn.Windows
             M3Scheme s = M3.Scheme;
             float scale = M3.Scale;
             float width = MathF.Max(1f, ImGui.GetContentRegionAvail().X);
-            float badge = 40f * scale;
+            float badge = MathF.Min(BrandLogoSize * scale, width);
             float height = badge + (8f * scale);
+
+            float gap = 1f * scale;
+            string tagline = $"v{Plugin.Version}";
+            float nameHeight = 0f;
+            float textHeight = 0f;
+            if (expanded)
+            {
+                nameHeight = MeasureText(M3.TitleMedium, BrandName).Y;
+                textHeight = nameHeight + gap + MeasureText(M3.LabelSmall, tagline).Y;
+                height = MathF.Max(height, textHeight + (4f * scale));
+            }
 
             bool pressed = ImGui.InvisibleButton("##atr_brand", new Vector2(width, height));
             bool hovered = ImGui.IsItemHovered();
@@ -351,46 +400,22 @@ namespace ActionTimelineReborn.Windows
                 ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
             }
 
-            Vector2 center = expanded
-                ? new Vector2(min.X + (8f * scale) + (badge * 0.5f), min.Y + (height * 0.5f))
-                : new Vector2(min.X + (width * 0.5f), min.Y + (height * 0.5f));
-            Vector2 half = new(badge * 0.5f);
-            if (!M3ActionIcon.Image(drawList, GetLogo(), center - half, center + half, M3.ShapeSmall))
-            {
-                drawList.AddRectFilled(center - half, center + half, M3.U32(s.PrimaryContainer), M3.ShapeSmall);
-                M3Draw.IconCentered(drawList, FontAwesomeIcon.Stream, center - half, center + half, s.OnPrimaryContainer);
-            }
+            float logoX = expanded ? min.X + (8f * scale) : min.X + ((width - badge) * 0.5f);
+            M3Brand.DrawLogo(drawList, new Vector2(logoX, min.Y + ((height - badge) * 0.5f)), badge);
 
             if (expanded)
             {
-                var tagline = $"v{Plugin.Version}";
-                float textX = center.X + (badge * 0.5f) + (10f * scale);
+                float textX = logoX + badge + (10f * scale);
                 float textWidth = MathF.Max(16f * scale, max.X - textX - (4f * scale));
-                float gap = 1f * scale;
-
-                string name;
-                Vector2 nameSize;
+                float textTop = min.Y + ((height - textHeight) * 0.5f);
                 using (ImRaii.PushFont(M3.TitleMedium))
                 {
-                    name = M3Navigation.Truncate("Action Timeline", textWidth);
-                    nameSize = ImGui.CalcTextSize(name);
-                }
-
-                Vector2 taglineSize;
-                using (ImRaii.PushFont(M3.LabelSmall))
-                {
-                    taglineSize = ImGui.CalcTextSize(tagline);
-                }
-
-                float textTop = min.Y + ((height - nameSize.Y - gap - taglineSize.Y) * 0.5f);
-                using (ImRaii.PushFont(M3.TitleMedium))
-                {
-                    drawList.AddText(new Vector2(textX, textTop), M3.U32(s.OnSurface, 0.98f), name);
+                    drawList.AddText(new Vector2(textX, textTop), M3.U32(s.OnSurface, 0.98f), M3Navigation.Truncate(BrandName, textWidth));
                 }
 
                 using (ImRaii.PushFont(M3.LabelSmall))
                 {
-                    drawList.AddText(new Vector2(textX, textTop + nameSize.Y + gap), M3.U32(s.Primary), tagline);
+                    drawList.AddText(new Vector2(textX, textTop + nameHeight + gap), M3.U32(s.Primary), tagline);
                 }
             }
 
@@ -407,7 +432,7 @@ namespace ActionTimelineReborn.Windows
             }
         }
 
-        private void DrawNavigationItems(bool expanded)
+        private List<M3NavItem> BuildNavigationItems()
         {
             List<M3NavItem> items =
             [
@@ -427,8 +452,12 @@ namespace ActionTimelineReborn.Windows
             items.Add(new(AddTimelineItem, "Add timeline", FontAwesomeIcon.Plus, false, "Add another timeline window",
                 SeparatorAfter: true, Section: "Timelines"));
             items.Add(new(HelpPage, "Help", FontAwesomeIcon.QuestionCircle, _page == HelpPage));
+            return items;
+        }
 
-            string? clicked = M3Navigation.Draw("atr_nav", items, expanded);
+        private void DrawNavigationItems(List<M3NavItem> items, bool expanded, bool iconsOnly)
+        {
+            string? clicked = M3Navigation.Draw("atr_nav", items, expanded, iconsOnly);
             if (clicked == AddTimelineItem)
             {
                 Settings.TimelineSettings.Add(new DrawingSettings()
@@ -727,54 +756,72 @@ namespace ActionTimelineReborn.Windows
         #region Appearance
         private void DrawAppearancePage()
         {
-            using (M3Card.Begin("appearance_theme", "Theme", FontAwesomeIcon.Palette, subtitle: "Applies to this window and the timelines."))
+            using M3Card.Scope card = M3Card.Begin("appearance_theme", "Theme", FontAwesomeIcon.Palette,
+                subtitle: "Applies to every Action Timeline Reborn window.");
+
+            Vector4 accent = Settings.UiAccentColor;
+            if (M3Widgets.RowColorChoices("Accent color", ref accent, _accentPresets,
+                "The whole color scheme is built from this one color. Pick a preset, or the last swatch for your own color."))
             {
-                Vector4 accent = Settings.UiAccentColor;
-                if (M3Widgets.RowColorChoices("Accent color", ref accent, _accentPresets,
-                    "The whole color scheme is built from this one color. Pick a preset, or the last swatch for your own color."))
-                {
-                    Settings.UiAccentColor = accent with { W = 1f };
-                }
+                Settings.UiAccentColor = accent with { W = 1f };
             }
 
-            using (M3Card.Begin("appearance_size", "Size", FontAwesomeIcon.TextHeight))
+            float text = Settings.UiTextScale;
+            if (M3Widgets.RowDragFloat("Text size", ref text, 0.75f, 2f, "%.2fx",
+                "Scales the text, on top of Dalamud's own font size.", step: ScaleStep))
             {
-                float text = Settings.UiTextScale;
-                if (M3Widgets.RowDragFloat("Text size", ref text, 0.75f, 2f, "%.2fx"))
-                {
-                    Settings.UiTextScale = MathF.Round(text, 2);
-                }
-
-                float element = Settings.UiElementScale;
-                if (M3Widgets.RowDragFloat("Control size", ref element, 0.75f, 2f, "%.2fx", "Buttons, switches, sliders and other controls."))
-                {
-                    Settings.UiElementScale = MathF.Round(element, 2);
-                }
-
-                float padding = Settings.UiPaddingScale;
-                if (M3Widgets.RowDragFloat("Spacing", ref padding, 0.5f, 2f, "%.2fx", "The space around and between things."))
-                {
-                    Settings.UiPaddingScale = MathF.Round(padding, 2);
-                }
-
-                bool isDefault = Settings.UiTextScale == 1f && Settings.UiElementScale == 1f && Settings.UiPaddingScale == 1f;
-                if (M3Widgets.Button("##appearance_reset", "Reset sizes", M3ButtonStyle.Text, FontAwesomeIcon.Undo, enabled: !isDefault))
-                {
-                    Settings.UiTextScale = 1f;
-                    Settings.UiElementScale = 1f;
-                    Settings.UiPaddingScale = 1f;
-                }
+                Settings.UiTextScale = MathF.Round(text, 2);
             }
 
-            using (M3Card.Begin("appearance_motion", "Motion", FontAwesomeIcon.Film))
+            float element = Settings.UiElementScale;
+            if (M3Widgets.RowDragFloat("Control size", ref element, 0.75f, 2f, "%.2fx",
+                "Scales buttons, switches, fields and the other controls.", step: ScaleStep))
             {
-                float motionPercent = Settings.UiMotionScale * 100f;
-                if (M3Widgets.RowDragFloat("Animation length", ref motionPercent, 0f, 200f, "%.0f%%",
-                    "Scales how long animations take in the plugin's windows, such as folding this window and opening cards. Set it to 0% to turn them off.",
-                    step: 1f))
-                {
-                    Settings.UiMotionScale = MathF.Round(motionPercent) / 100f;
-                }
+                Settings.UiElementScale = MathF.Round(element, 2);
+            }
+
+            float padding = Settings.UiPaddingScale;
+            if (M3Widgets.RowDragFloat("Spacing", ref padding, 0.5f, 2f, "%.2fx",
+                "Scales the space around and between things, without resizing them.", step: ScaleStep))
+            {
+                Settings.UiPaddingScale = MathF.Round(padding, 2);
+            }
+
+            float motionPercent = Settings.UiMotionScale * 100f;
+            if (M3Widgets.RowDragFloat("Animation length", ref motionPercent, 0f, 200f, "%.0f%%",
+                "How long animations take, such as folding a window or opening a card. 0% turns them off.", step: MotionStepPercent))
+            {
+                Settings.UiMotionScale = MathF.Round(motionPercent) / 100f;
+            }
+
+            bool compactLayout = Settings.UiCompactLayout;
+            if (M3Widgets.RowSwitch("Compact layout", ref compactLayout,
+                "Tighter padding and shorter rows, so more fits on screen."))
+            {
+                Settings.UiCompactLayout = compactLayout;
+            }
+
+            bool inlineDescriptions = Settings.UiInlineDescriptions;
+            if (M3Widgets.RowSwitch("Inline descriptions", ref inlineDescriptions,
+                "Show each setting's description under its name. Turn it off to show descriptions on hover instead."))
+            {
+                Settings.UiInlineDescriptions = inlineDescriptions;
+            }
+
+            bool iconSidebar = Settings.UiIconSidebar;
+            if (M3Widgets.RowSwitch("Icons-only sidebar", ref iconSidebar,
+                "Turn the sidebar into a narrow strip of icons. Hover an icon to see its name."))
+            {
+                Settings.UiIconSidebar = iconSidebar;
+            }
+
+            bool isDefault = Settings.UiTextScale == 1f && Settings.UiElementScale == 1f && Settings.UiPaddingScale == 1f && Settings.UiMotionScale == 1f;
+            if (M3Widgets.Button("##appearance_reset", "Reset sizes", M3ButtonStyle.Text, FontAwesomeIcon.Undo, enabled: !isDefault))
+            {
+                Settings.UiTextScale = 1f;
+                Settings.UiElementScale = 1f;
+                Settings.UiPaddingScale = 1f;
+                Settings.UiMotionScale = 1f;
             }
         }
         #endregion
@@ -804,10 +851,16 @@ namespace ActionTimelineReborn.Windows
                     Util.OpenLink("https://github.com/FFXIV-CombatReborn/ActionTimelineReborn");
                 }
 
+                flow.Next(M3Widgets.ButtonWidth(FontAwesomeIcon.Comments, "Discord"));
+                if (M3Widgets.Button("##help_discord", "Discord", M3ButtonStyle.Outlined, FontAwesomeIcon.Comments))
+                {
+                    Util.OpenLink(DiscordUrl);
+                }
+
                 flow.Next(M3Widgets.ButtonWidth(FontAwesomeIcon.Coffee, "Support on Ko-fi"));
                 if (M3Widgets.Button("##help_kofi", "Support on Ko-fi", M3ButtonStyle.Filled, FontAwesomeIcon.Coffee, accent: _koFiColor))
                 {
-                    Util.OpenLink("https://ko-fi.com/ltscombatreborn");
+                    Util.OpenLink(KofiUrl);
                 }
             }
         }

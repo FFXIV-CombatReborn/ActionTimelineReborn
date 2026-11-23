@@ -42,6 +42,8 @@ internal static class TimelineWindow
 
     private const float StatusIconAspect = 0.75f;
 
+    private static float Scale => M3.Scale / M3.ElementBaseline;
+
     private static readonly int[] AxisSteps = [1, 2, 5, 10, 15, 30, 60];
 
     private static readonly string[] _axisLabels = new string[256];
@@ -113,7 +115,7 @@ internal static class TimelineWindow
         Layout layout = _layouts.GetOrCreateValue(setting);
 
         using M3.WindowScaleScope scale = M3.PushWindowScale(setting.Scale);
-        using M3Style.Scope theme = M3Style.Push(M3Density.Compact);
+        using M3Style.Scope theme = M3Style.Push(M3Window.DefaultDensity);
         using ImRaii.ColorDisposable background = ImRaii.PushColor(ImGuiCol.WindowBg,
             setting.Locked ? setting.LockedBackgroundColor : setting.UnlockedBackgroundColor);
 
@@ -143,7 +145,7 @@ internal static class TimelineWindow
 
     private static void DrawContent(DrawingSettings setting, int index, Layout layout)
     {
-        float scale = M3.Scale;
+        float scale = Scale;
         ImGuiStylePtr style = ImGui.GetStyle();
         ImDrawListPtr drawList = ImGui.GetWindowDrawList();
         bool live = setting.View == TimelineView.Live;
@@ -357,7 +359,7 @@ internal static class TimelineWindow
     private static bool DrawGcd(ImDrawListPtr drawList, TimelineItem item, DrawingSettings setting, in Axis axis, float top, float bottom, out Vector2 min, out Vector2 max)
     {
         float laneHeight = bottom - top;
-        float inset = IconInset * M3.Scale;
+        float inset = IconInset * Scale;
 
         float x0 = axis.X(item.StartTime);
         float x1 = axis.X(item.EndTime);
@@ -401,7 +403,7 @@ internal static class TimelineWindow
 
         if (canceled)
         {
-            drawList.AddRect(min, max, M3.U32(Fade(accent, 0.8f)), rounding, ImDrawFlags.None, 1f * M3.Scale);
+            drawList.AddRect(min, max, M3.U32(Fade(accent, 0.8f)), rounding, ImDrawFlags.None, 1f * Scale);
         }
 
         if (setting.ShowAnimationLock)
@@ -416,7 +418,7 @@ internal static class TimelineWindow
 
     private static bool DrawOgcd(ImDrawListPtr drawList, TimelineItem item, DrawingSettings setting, in Axis axis, float top, float bottom, out Vector2 min, out Vector2 max)
     {
-        float inset = IconInset * M3.Scale;
+        float inset = IconInset * Scale;
         float size = bottom - top - (inset * 2f);
 
         float x0 = axis.X(item.StartTime);
@@ -439,7 +441,7 @@ internal static class TimelineWindow
 
     private static bool DrawAutoAttack(ImDrawListPtr drawList, TimelineItem item, DrawingSettings setting, in Axis axis, float y, out Vector2 min, out Vector2 max)
     {
-        float radius = AutoAttackRadius * M3.Scale;
+        float radius = AutoAttackRadius * Scale;
         Vector2 center = new(axis.X(item.StartTime), y);
 
         Vector2 reach = new(radius * 2f, radius * 2f);
@@ -461,7 +463,7 @@ internal static class TimelineWindow
             return;
         }
 
-        float half = LockLineHeight * M3.Scale * 0.5f;
+        float half = LockLineHeight * Scale * 0.5f;
         float start = x0 + axis.Width(item.CastingTime);
         float end = start + axis.Width(item.AnimationLockTime);
         drawList.AddRectFilled(new Vector2(start, centerY - half), new Vector2(end, centerY + half),
@@ -499,13 +501,13 @@ internal static class TimelineWindow
 
         if (DamageColor(setting, item) is Vector4 color)
         {
-            float thickness = DamageRingWidth * M3.Scale;
+            float thickness = DamageRingWidth * Scale;
             Vector2 grow = new(thickness * 0.5f);
             drawList.AddRect(min - grow, max + grow, M3.U32(color), rounding + grow.X, ImDrawFlags.None, thickness);
             return;
         }
 
-        drawList.AddRect(min, max, M3.U32(setting.GetColor(TimelineColor.IconBorder)), rounding, ImDrawFlags.None, 1f * M3.Scale);
+        drawList.AddRect(min, max, M3.U32(setting.GetColor(TimelineColor.IconBorder)), rounding, ImDrawFlags.None, 1f * Scale);
     }
 
     private static Vector4? DamageColor(DrawingSettings setting, TimelineItem item)
@@ -529,7 +531,7 @@ internal static class TimelineWindow
     // Each change to a status you applied, at the moment it happened. Changes that land together sit side by side.
     private static void DrawStatusChanges(ImDrawListPtr drawList, List<StatusChangeItem> changes, DrawingSettings setting, in Axis axis, float top, ref Hover hover)
     {
-        float scale = M3.Scale;
+        float scale = Scale;
         float iconHeight = StatusIconHeight * setting.StatusIconScale * scale;
         Vector2 size = new(iconHeight * StatusIconAspect, iconHeight);
         float gap = 1f * scale;
@@ -551,7 +553,7 @@ internal static class TimelineWindow
     // Underlined to say whether the status was gained or lost.
     private static void DrawStatusChange(ImDrawListPtr drawList, StatusChangeItem change, DrawingSettings setting, Vector2 min, Vector2 size, ref Hover hover)
     {
-        float scale = M3.Scale;
+        float scale = Scale;
         Vector2 max = min + size;
         bool gained = change.Type is StatusChangeType.Gained or StatusChangeType.StacksUp;
 
@@ -593,7 +595,7 @@ internal static class TimelineWindow
         TimeSpan threshold = TimeSpan.FromSeconds(MathF.Max(setting.GCDClippingThreshold, 0.001f));
         TimeSpan longest = TimeSpan.FromSeconds(setting.GCDClippingMaxTime);
         float laneHeight = bottom - top;
-        float padding = ClipLabelPadding * M3.Scale;
+        float padding = ClipLabelPadding * Scale;
         TimelineItem? previous = null;
 
         using ImRaii.FontDisposable font = ImRaii.PushFont(M3.LabelSmall);
@@ -660,7 +662,7 @@ internal static class TimelineWindow
             return 0;
         }
 
-        float scale = M3.Scale;
+        float scale = Scale;
         float inset = IconInset * scale;
         float gcdSize = (GcdLaneHeight - (IconInset * 2f)) * scale;
         float ogcdSize = (OgcdLaneHeight - (IconInset * 2f)) * scale;
@@ -743,7 +745,7 @@ internal static class TimelineWindow
         {
             DrawIcon(drawList, item, setting, min, size, M3.DisabledContent);
             drawList.AddRect(min, min + new Vector2(size), M3.U32(Fade(setting.GetColor(TimelineColor.CanceledCast), 0.8f)),
-                M3ActionIcon.Rounding(size), ImDrawFlags.None, 1f * M3.Scale);
+                M3ActionIcon.Rounding(size), ImDrawFlags.None, 1f * Scale);
             return;
         }
 
@@ -775,7 +777,7 @@ internal static class TimelineWindow
             return;
         }
 
-        float scale = M3.Scale;
+        float scale = Scale;
         float iconHeight = StatusIconHeight * setting.StatusIconScale * scale;
         Vector2 size = new(iconHeight * StatusIconAspect, iconHeight);
         PlaceHistoryStatuses(changes, right, size.X, 1f * scale);
@@ -839,7 +841,7 @@ internal static class TimelineWindow
 
         uint lineColor = M3.U32(setting.GetColor(TimelineColor.AxisLines));
         uint labelColor = M3.U32(setting.GetColor(TimelineColor.AxisText));
-        float thickness = 1f * M3.Scale;
+        float thickness = 1f * Scale;
 
         using ImRaii.FontDisposable font = ImRaii.PushFont(M3.LabelSmall);
         for (int seconds = step; ; seconds += step)
@@ -871,7 +873,7 @@ internal static class TimelineWindow
     private static void DrawNowLine(ImDrawListPtr drawList, DrawingSettings setting, in Axis axis, float top, float bottom, float labelTop)
     {
         uint color = M3.U32(setting.GetColor(TimelineColor.NowLine));
-        float scale = M3.Scale;
+        float scale = Scale;
         float cap = NowCapRadius * scale;
 
         drawList.AddLine(new Vector2(axis.NowX, top + cap), new Vector2(axis.NowX, bottom), color, 2f * scale);

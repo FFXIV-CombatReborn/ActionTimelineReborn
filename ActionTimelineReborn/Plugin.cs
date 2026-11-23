@@ -2,6 +2,7 @@ using ActionTimelineReborn.Configurations;
 using ActionTimelineReborn.Timeline;
 using ActionTimelineReborn.Windows;
 using Dalamud.Game.ClientState.Conditions;
+using Dalamud.Interface;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
 using ECommons;
@@ -17,6 +18,8 @@ public class Plugin : IDalamudPlugin
     public static string Name => "ActionTimelineReborn";
 
     internal static readonly string Version = typeof(Plugin).Assembly.GetName().Version?.ToString() ?? "0.0.0.0";
+
+    private const string LogoResource = "ActionTimelineReborn.Resources.ATR_Icon.png";
 
     public static Settings Settings { get; private set; } = null!;
 
@@ -41,7 +44,16 @@ public class Plugin : IDalamudPlugin
             Settings = new Settings();
         }
 
+        Settings.Migrate();
+
+        M3.ElementBaseline = 0.75f;
         M3.Initialize(pluginInterface, Settings);
+
+        M3Brand.Name = "Action Timeline Reborn";
+        M3Brand.Version = Version;
+        M3Brand.FallbackIcon = FontAwesomeIcon.Stream;
+        M3Brand.LogoCornerFraction = 0.047f;
+        M3Brand.SetLogoResource(typeof(Plugin).Assembly, LogoResource);
 
         CreateWindows();
     }
@@ -98,6 +110,7 @@ public class Plugin : IDalamudPlugin
             return;
         }
 
+        M3Window.DefaultDensity = Settings.UiCompactLayout ? M3Density.Tight : M3Density.Compact;
         M3.BeginFrame();
         _windowSystem?.Draw();
 
